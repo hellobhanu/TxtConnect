@@ -1,0 +1,1446 @@
+<?php
+// $Id: $
+
+
+	/**
+	 *	Implementation of hook_help
+	 *		Adds help menu item
+	 */
+function socialmediafeeds_help($path, $arg) {
+  switch ($path) {
+   case 'admin/help#socialmediafeeds':
+      return t('Publishes content to social media sites');
+  }
+}
+
+
+  /**
+   * Implementation of hook_perm()
+   */
+function socialmediafeeds_perm() {
+  return array('administer socialmediafeeds', 'add accounts socialmediafeeds','use global account');
+}
+
+  /**
+   * Implimentation of hook_theme()
+   */
+function socialmediafeeds_theme() {
+  return array(
+    'socialmediafeeds_useredit_account_list' => array(
+      'arguments' => array('form' => NULL),
+    )
+  );
+}
+
+  /**
+   *	Implementation of hook_menu
+   *		Adds menu items or page callbacks for module 
+   */
+function socialmediafeeds_menu() {
+  $items = array();
+
+  $items['admin/settings/socialmediafeeds'] = array(
+    'title' 			=> t('Social Media Feeds'),
+    'description' 		=> t('Social Media Feeds module settings'),
+    'page callback' 	=> 'drupal_get_form',
+    'page arguments' 	=> array('socialmediafeeds_admin_settings'),
+    'access arguments' 	=> array('administer socialmediafeeds'),
+    'type' => MENU_NORMAL_ITEM,
+    'file'				=> 'socialmediafeeds.admin.inc',
+  );
+	
+  $items['admin/settings/socialmediafeeds/general'] = array(
+    'title' => 'General Settings',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+	
+  $items['admin/settings/socialmediafeeds/globalaccounts'] = array(
+    'title' 			=> t('Global Accounts'),
+    'description' 		=> t('Social Media Feeds module settings'),
+    'page callback' 	=> 'socialmediafeeds_admin_global_accounts', //'drupal_get_form',
+    //'page arguments' 	=> array('socialmediafeeds_admin_settings'),
+    'access arguments' 	=> array('administer socialmediafeeds'),
+    'type' => MENU_LOCAL_TASK,
+    'parent' => 'admin/settings/socialmediafeeds',
+    'file'				=> 'socialmediafeeds.admin.inc',
+  );
+	
+  $items['user/%user_category/edit/socialmediafeeds'] = array(
+    'title' => 'Social Network Accounts',
+    'page callback' => 'socialmediafeeds_user_settings',
+    'page arguments' => array(1),
+    'access arguments' => array('add accounts socialmediafeeds'),
+    'load arguments' => array('%map', '%index'),
+    'weight' => 10,
+    'file' => 'socialmediafeeds.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+	 
+      //
+  $items['socialmediafeedaccounts'] = array(
+    'page callback' => 'socialmediafeedaccounts_callback',
+    'title'  => t('Get Account'),
+    'access callback' 	=> true,
+    'type' => MENU_CALLBACK
+  );
+	 
+  $items['socialmediafeedaccounts_followme'] = array(
+      'page callback' => 'socialmediafeeds_followme_callback',
+      'page arguments' => array(1, 2),
+      'title'  => t('Get Account URL'),
+      'access callback' => true,
+      'type' => MENU_CALLBACK,
+  );
+
+  $items['socialmediafeeds/twitter_confirm/%/%'] = array(
+      'page callback' => 'socialmediafeeds_twitter_auth_confirm',
+      'page arguments' => array(2, 3),
+      'title'  => t('Get Account'),
+      'access callback' 	=> true,
+      'type' => MENU_CALLBACK
+  );
+
+  $items['socialmediafeeds/linkedin_confirm/%/%'] = array(
+      'page callback' => 'socialmediafeeds_linkedin_auth_confirm',
+      'page arguments' => array(2, 3),
+      'title'  => t('Get Account'),
+      'access callback' 	=> true,
+      'type' => MENU_CALLBACK
+  );
+	
+ /*$items['user/%user_category/edit/socialmediafeeds/edit'] = array(
+    'title' => 'Edit',
+    'description' => 'Edit an existing social media account',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('socialmediafeeds_edit_account'),
+    'access arguments' => array('add accounts socialmediafeeds'),
+    'type' => MENU_CALLBACK,
+    'file' => 'socialmediafeeds.admin.inc',
+  );*/
+	
+  return $items;
+}
+
+
+/**********   AJAX/JSON Callbacks **************/
+
+	/**
+	*	Return socialmedia profile url  
+	*/
+function socialmediafeeds_followme_callback($service, $screen_name = FALSE){
+	
+	global $user;  $drupal_user = $user;
+	
+		//End function if user id not present
+	if(!$drupal_user->uid){
+		return false;
+	}
+	
+	switch($service) {
+	
+		case "Facebook":
+			
+				//Include facebook API PHP libraries
+			module_load_include('php', 'socialmediafeeds', 'facebook/facebook');
+			module_load_include('php', 'socialmediafeeds', 'facebook/lib');
+			
+			$acct = socialmediafeeds_get_accounts($drupal_user, $service, $screen_name);
+			
+			$facebook = new Facebook(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''));
+			
+			$facebookid = $acct[0]['password'];
+			
+			//echo "<pre>"; print_r($acct); echo "</pre>";
+			$usrid = split($facebookid, "-");
+			//echo "<pre>"; print_r($usrid); echo "</pre>";
+			$user_details = $facebook->api_client->users_getInfo($usrid[1], 'profile_url'); 
+			//print($user_details);
+			return "Facebook|". $user_details;
+			//drupal_json(array('status' => TRUE, 'data' => $user_details));
+		
+		
+		break;
+		
+		case "Twitter":
+		
+			$twitterurl = "Twitter|http://www.twitter.com/";
+		
+			$twitterurl .= $screen_name;
+			
+			return $twitterurl;
+		
+		break;
+		
+		case "LinkedIn":
+		
+		break;
+	
+	}
+	
+}
+
+
+	/**
+	*	Display list of social media acccounts for logged in drupal user
+	*/
+function socialmediafeedaccounts_callback(){
+
+	if($_POST['type']) {
+		$type = $_POST['type'];	
+	}
+	
+		//Load current user acocunt
+	global $user;  $drupal_user = $user;
+	
+		//End function if user id not present
+	if(!$drupal_user->uid){
+		return false;
+	}
+	
+	$socialmediafeeds_accounts =  socialmediafeeds_accounts($drupal_user->uid, $serviceid);
+	$acctArray = array();
+	$output = "<ul>";
+	
+	foreach($socialmediafeeds_accounts as $key=>$value) {
+		$acctArray[] = array("account"=>$socialmediafeeds_accounts[$key]['screen_name'],"service"=>$socialmediafeeds_accounts[$key]['service']);
+		switch($type) {
+			case "badge":
+				$output .= '<li><input type="checkbox" class="socialmedia" value="'. socialmediafeeds_followme_callback($socialmediafeeds_accounts[$key]['service'], $socialmediafeeds_accounts[$key]['screen_name']) .'" /> '. $socialmediafeeds_accounts[$key]['screen_name'] .' <img src="/'.drupal_get_path('module', 'socialmediafeeds').'/images/'.strtolower($socialmediafeeds_accounts[$key]['service']).'.png" alt="'.$socialmediafeeds_accounts[$key]['service'].' Logo" /> </li>';
+			break;
+			
+			case "statusfeed":
+				$output .= '<li><input type="checkbox" class="socialmedia" value="'. $socialmediafeeds_accounts[$key]['service']. '=' .$socialmediafeeds_accounts[$key]['screen_name']. '"/> '.$socialmediafeeds_accounts[$key]['screen_name'] .' <img src="/'.drupal_get_path('module', 'socialmediafeeds').'/images/'.strtolower($socialmediafeeds_accounts[$key]['service']).'.png" alt="'.$socialmediafeeds_accounts[$key]['service'].' Logo" /> Count: '.  createSelectBox('count'.$key) .' Theme: <select name="" id="theme'.$key.'"><option value="default">Default</option></select></li>';
+			break;
+		}
+		//$output .= '<input type="checkbox" class="socialmedia" value="'.$url.'" /> '. $socialmediafeeds_accounts[$key]['screen_name'] .' ('. $socialmediafeeds_accounts[$key]['service'] .') <br/>';
+	}
+	
+	$output .= "</ul>";
+
+	if(!empty($acctArray)) {
+		// Final rendering callback.
+		
+			//Use echo instead of "return" so that page html is not rendered.
+		echo $output;
+		//drupal_json(array('status' => TRUE, 'data' => $output));
+	} else {
+		
+		echo '<div class="error">No accounts found.</div>';
+		//drupal_json(array('status' => FALSE, 'data' => ''));
+	}
+
+}
+
+	/**
+	*
+	*/
+function createSelectBox($name, $total = 50, $preselect = 10, $class = "count-select") {
+	
+	$output = '<select id="'. $name .'" name="'.$name.'" class="'.$class.'">';
+
+		//Loop thru to create count
+	for($i=1; $i <= $total; $i++) {
+			
+			//Check of preselected matches current
+		if($i == $preselect) {
+				$selected = 'SELECTED';
+		} else {
+			$selected = "";
+		}
+		
+		$output .= '<option value="'.$i.'" '. $selected .'>'.$i.'</option>';
+		
+	}
+	$output .= "</select>";
+	
+	return $output;
+}
+
+
+
+	/**
+	 * Implementation of hook_form_alter().
+	 * - Used to add social media feed info to add/edit node form
+	 */
+function socialmediafeeds_form_alter(&$form, $form_state, $form_id) {
+ 		
+	switch($form_id){
+		
+			//If form_id is blog form, then alter with socialmedia contents
+		case "blog_node_form":
+	
+			if(module_exists('socialmediafeeds')){
+				drupal_add_css(drupal_get_path('module', 'socialmediafeeds') .'/socialmediafeeds.css', 'module');
+			}
+			
+		 		//load current user
+			global $user;
+			$account = $user;
+	
+			// If we haven't enabled Twitter posting on this node type, nothing to do
+			// here.
+			$type = $form['#node']->type;
+			$allowed_types = variable_get('socialmediafeeds_node_types', array('Twitter' => 'Twitter', 'Facebook' => 'Facebook'));
+			//print_r($allowed_types);
+			if (empty($allowed_types[$type])) {
+			  return;
+			}
+		
+			if(!empty($form['#node']->nid)) {
+				$formEdit = true;
+			} else {
+				$formEdit = false;
+			}
+		
+			$services = variable_get('socialmediafeeds_services', array());
+			//print_r($services);										
+			$form['socialmediafeeds'] = array (
+				'#type'			=> 'fieldset',
+				'#title' 		=> t('Post to Social Media'),
+				'#collapsible' 	=> TRUE,
+				'#collapsed' 	=> $formEdit,
+				'#tree'			=> true,
+				'#attributes'	=> array("class"=>'socialmediafeeds-fieldset'),
+				);
+			
+			if(is_array($services)) {
+				drupal_add_js(drupal_get_path('module', 'socialmediafeeds') .'/socialmediafeeds_blogpost.js', 'module');
+			}
+			
+			$form['#validate'][] = "socialmediafeeds_publish_blogpost_validate";
+			
+				
+					//Load Accounts based on service id
+				$socialmediafeeds_globalaccounts =  socialmediafeeds_get_global_accounts();
+				
+					//loop thru each account results and add to array
+				foreach($socialmediafeeds_globalaccounts as $key=>$value) {
+					
+					if($formEdit) {
+						$defaultval = 0;
+					} else {
+						$defaultval = $socialmediafeeds_globalaccounts[$key]['autopost'];
+					}
+					
+					
+					if(in_array($socialmediafeeds_globalaccounts[$key]['service'], $services)) {
+						
+						$hide = variable_get('socialmediafeeds_hide_global', '');
+						if($hide) {
+							$type = "hidden";
+						}	else {
+							$type = "checkbox";
+						}
+					  $form['socialmediafeeds']['account-'.$socialmediafeeds_globalaccounts[$key]['screen_name']] = array(
+						'#type' 		=> $type,
+						'#title' 		=> t($socialmediafeeds_globalaccounts[$key]['screen_name'] .' <img src="/'.drupal_get_path('module', 'socialmediafeeds').'/images/'.strtolower($socialmediafeeds_globalaccounts[$key]['service']).'.png" alt="'.$socialmediafeeds_globalaccounts[$key]['service'].' Logo" /> <span class="small-sub">(Global)</span>'),
+						'#disabled' => variable_get('socialmediafeeds_disableoveride_global', ''),
+						'#default_value'=> $defaultval,
+						'#return_value' => $socialmediafeeds_globalaccounts[$key]['service'] ."|". $socialmediafeeds_globalaccounts[$key]['screen_name'],
+					  );
+						
+					}
+				}
+				
+					//Load Accounts based on service id
+				$socialmediafeeds_accounts =  socialmediafeeds_accounts($account->uid, $serviceid);
+
+					//loop thru each account results and add to array
+				foreach($socialmediafeeds_accounts as $key1=>$value1) {
+					
+					if($formEdit) {
+						$defaultval = 0;
+					} else {
+						$defaultval = $socialmediafeeds_accounts[$key1]['autopost'];
+					}
+					
+					if(in_array($socialmediafeeds_accounts[$key1]['service'], $services)) {
+						
+					  $form['socialmediafeeds']['account-'.$socialmediafeeds_accounts[$key1]['screen_name']] = array(
+						'#type' 		=> 'checkbox',
+						'#title' 		=> t($socialmediafeeds_accounts[$key1]['screen_name'] .' <img src="/'.drupal_get_path('module', 'socialmediafeeds').'/images/'.strtolower($socialmediafeeds_accounts[$key1]['service']).'.png" alt="'.$socialmediafeeds_accounts[$key1]['service'].' Logo" />'),
+						'#default_value'=> $defaultval,
+						'#return_value' => $socialmediafeeds_accounts[$key1]['service'] ."|". $socialmediafeeds_accounts[$key1]['screen_name'],
+					  );
+						
+					}
+				}
+				
+					//Get global social network account for site
+			if (user_access('use global account')) {
+	
+				$form['socialmediafeeds'][$serviceid]['add-account'] = array(
+						'#type' => 'item',
+						//'#title' => t('Account'),
+						'#value' => '<a href="/user/'.$account->uid.'/edit/socialmediafeeds" id="">Add Account</a>',
+						'#id' => $serviceid.'-account'
+				);
+			}
+	
+			if(isset($form_state['values']['status']['#value'])) {
+				$status_value = $form_state['values']['status']['#value'];
+			} else {
+				$status_value = variable_get('sociamediafeeds_default_format', 'I just posted on the Synapse Wall of Cool. !tinyurl');
+			}
+	
+			$form['socialmediafeeds']['status'] = array(
+					  '#type' 			=> 'textfield',
+					  '#title' 			=> t('Status Message'),
+					  '#default_value' 	=>  $status_value,
+					  '#description'	=> t('You can use !url, !url-alias, !tinyurl, !title and !user as replacement text.'),
+			);
+			
+	
+		break;
+		
+	 }
+ 
+}
+
+
+
+	/**
+	*	Validate node add/edit form entry.  
+	*		
+	* If a social network is selected for posting, make sure an account is also selected.
+	*/
+function socialmediafeeds_publish_blogpost_validate($form, &$form_state) {
+		//Load services selected in admin settings
+	$services = variable_get('socialmediafeeds_services', array());
+		//Cycle through each service 
+	foreach($services as $service){
+			//determine if service checkbox is true
+		if(!empty($form_state['values']['account'][$service.'-post'])) {
+			
+				//check if account is selected
+			if(empty($form_state['values']['socialmediafeeds'][$service.'-account'])) {
+				form_set_error('socialmediafeeds]['.$service.'-account', t('You selected to post to '.$service .', but you did not select an account.'));
+			}
+			
+				//Check if status message
+			if(empty($form_state['values']['socialmediafeeds']['status'])) {
+				form_set_error('socialmediafeeds][status', t('Please enter in a status message'));
+			}
+		}	
+	}
+	
+}
+
+	/**
+	*  Implementation of hook_user().
+	*/
+function socialmediafeeds_user($op, &$edit, &$account, $category = NULL) {
+  switch ($op) {
+    case 'categories':
+      return array(
+        array(
+          'name' => 'socialmediafeeds',
+          'title' => 'Social Media Feeds',
+          'weight' => 3,
+        ),
+      );
+  }
+}
+
+
+
+	/**
+	* A masked call for hook_get_accounts that first loads the logged in user info from database
+	*/
+function socialmediafeeds_accounts($uid, $serviceid = NULL, $full_access = FALSE) {
+	$drupal_user = user_load($uid);
+	return module_invoke_all('get_accounts', $drupal_user, $serviceid, $full_access);
+}
+
+
+	/**
+	*
+	*/
+function socialmediafeeds_get_global_accounts($serviceid = NULL) {
+  			
+  			//Create new array container
+		$accounts = array();
+		
+  		//Get global social network account for site
+	if (user_access('use global account')) {
+	
+  			
+  
+  			//Construct SQL query, match wit user id
+		$sql = "SELECT screen_name, password, service, autopost FROM {socialmediafeeds_globalaccounts}";
+		
+			//Only return accounts assoicated with a specified social networking service
+		if($serviceid != NULL) {
+			$sql .=" AND service = '%s'";  
+		}
+	
+			//Set the arguments to be used in the SQL query
+		$args = array($serviceid);
+		
+			//Query Database with sql and arguments
+		$results = db_query($sql, $args);
+	
+			//loop through sql query results and assign to array
+		while ($account = db_fetch_array($results)) {
+			$accounts[] = $account;
+		}
+
+	}
+	
+	//output array object
+	return $accounts;
+}
+
+
+	/***
+	* Get saved social networking account information for a user
+	* 
+	* @param $drupal_user
+	*	uid of drupal account
+	* @param $serviceid
+	*	Can filter results by social networking service name stored in db
+	* @param $screen_name
+	*	Can filter results to only return matched screen names
+	* @param $full_access
+	*	??
+	* @return Accounts array
+	*/
+function socialmediafeeds_get_accounts($drupal_user, $serviceid = NULL, $screen_name = FALSE, $full_access = FALSE) {
+  
+  		//Create new array container
+	$accounts = array();
+  
+		//Get global social network account for site
+	if (user_access('use global account') &&
+		($name = variable_get('socialmediafeeds_global_name', NULL)) &&
+		($pass = variable_get('socialmediafeeds_global_password', NULL))) {
+	
+		$accounts[$name] = array(
+		  'screen_name' => $name,
+		  'password' => $pass,
+		);
+	}
+  
+  		//Construct SQL query, match wit user id
+	$sql = "SELECT uid, screen_name, password, service, placement, count, autopost FROM {socialmediafeeds_useraccounts} WHERE uid = %d";
+		
+		//Only return accounts assoicated with a specified social networking service
+	if($serviceid != NULL) {
+		$sql .=" AND service = '%s'";  
+	}
+		//Only return accounts with matching screen name
+	if($screen_name) {
+		$sql .=" AND screen_name = '%s'";  
+	}
+	if ($full_access) {
+		$sql .= " AND password IS NOT NULL";
+	}
+	
+		//Set the arguments to be used in the SQL query
+	$args = array($drupal_user->uid, $serviceid, $screen_name);
+		
+		//Query Database with sql and arguments
+	$results = db_query($sql, $args);
+	
+		//loop through sql query results and assign to array
+	while ($account = db_fetch_array($results)) {
+	$accounts[] = $account;
+	}
+
+		//output array object
+	return $accounts;
+}
+
+
+	/***
+	* Get public social networking account information for a user
+	* 
+	* @param $serviceid
+	*	Can filter results by social networking service name stored in db
+	* @param $screen_name
+	*	Can filter results to only return matched screen names
+	* @param $full_access
+	*	??
+	* @return Accounts array
+	*/
+function socialmediafeeds_get_public_accounts($serviceid = NULL, $screen_name = FALSE, $full_access = FALSE) {
+  
+  		//Create new array container
+	$accounts = array();
+  
+  
+  		//Construct SQL query, match wit user id
+	$sql = "SELECT uid, screen_name, password, service, placement, count, autopost FROM {socialmediafeeds_useraccounts}";
+	
+		//Only return accounts assoicated with a specified social networking service
+	if($serviceid != NULL) {
+		$sql .=" WHERE service = '%s'";  
+	}
+		//Only return accounts with matching screen name
+	if($screen_name) {
+		$sql .=" AND screen_name = '%s'";  
+	}
+	if ($full_access) {
+		$sql .= " AND password IS NOT NULL";
+	}
+	
+		//Set the arguments to be used in the SQL query
+	$args = array($serviceid, $screen_name);
+		
+		//Query Database with sql and arguments
+	$results = db_query($sql, $args);
+	
+		//loop through sql query results and assign to array
+	while ($account = db_fetch_array($results)) {
+	$accounts[] = $account;
+	}
+
+		//output array object
+	return $accounts;
+}
+
+/**
+ * Override or insert PHPTemplate variables into the templates.
+ */
+function socialmediafeeds_preprocess_page(&$vars) {
+    
+ 
+}
+
+	/**
+	 * Implementation of hook_block()
+	 */
+function socialmediafeeds_preprocess_block(&$vars) {
+    //Check for match of status feed placeholder
+  if (preg_match_all("/\[(statusfeed)\s([^=\\]]+)=?([^\\]]*)\s(count)=?([^\\]]*)\s(theme)=?([^\\]]*)?\]/i", $vars['block']->content, $match)) {
+    $vars['block']->content = socialmediafeeds_replace_statusholder($vars['block']->content);
+  }
+}
+
+
+	/**
+	* Implimention of hook_preprocesss_user_profiles()
+	*/
+function socialmediafeeds_preprocess_user_profile(&$vars) {
+  $modulePath = drupal_get_path('module', 'socialmediafeeds');
+  drupal_add_js($modulePath .'/socialmediafeeds.js');
+  drupal_add_css($modulePath .'/socialmediafeeds.css');
+  if (isset($vars['account']->content['Personal Information']['profile_bio']['#value'])) {
+    $vars['account']->content['Personal Information']['profile_bio']['#value'] = socialmediafeeds_replace_statusholder($vars['account']->content['Personal Information']['profile_bio']['#value']);
+  }
+	
+}
+
+	/**
+	* Contruct urls
+	*/
+function socialmediafeeds_format_urls($text) {					
+		//Turn URLs into Links
+	$text = preg_replace('@(https?://([-\w\.]+)+(:\d+)?(/([\w/_\.]*(\?\S+)?)?)?)@', '<a href="$1" target="_blank">$1</a>', $text);						
+		//OPTIONAL: turn @replies into links
+	$text = preg_replace("/@([0-9a-zA-Z]+)/", '<a href="http://twitter.com/$1" target="_blank">@$1</a>', $text);
+	return $text;
+}
+
+	/**
+	*  Replace statusholder text
+	*/
+function socialmediafeeds_replace_statusholder($text) {
+	if(module_exists('socialmediafeeds')){
+      $modulePath = drupal_get_path('module', 'socialmediafeeds');
+      drupal_add_js($modulePath . '/socialmediafeeds.js');
+      drupal_add_css($modulePath . '/socialmediafeeds.css');
+	}
+	if (preg_match_all("/\[(statusfeed)\s([^=\\]]+)=?([^\\]]*)\s(count)=?([^\\]]*)\s(theme)=?([^\\]]*)?\]/i", $text, $match)) {
+		global $user; $drupal_user = $user;
+		$output = "";
+		
+			//Loop through each service found in match array
+		foreach($match[2] as $key=>$value) {
+			$replace = "";
+			$searchStr = $match[0][$key];		//string to replace in match array
+			$service = $match[2][$key]; 		//Service in match array
+			$screen_name = $match[3][$key];		//Screen_name in match array
+			$count = $match[5][$key];
+			$theme = $match[7][$key];
+			$acct = array();
+			
+			$acct = socialmediafeeds_get_public_accounts($service, $screen_name);	//Call to load social media account
+				
+			switch($service) {
+			
+				case "Facebook":
+  					$authResult = socialmediafeeds_authenticate($acct[0]['screen_name'], $acct[0]['password'], $service);	//Authenticate User/password for serivce
+  					
+  					if($authResult['fbobj']) {
+  					
+							//Save user settings to Facebook Object so we can gain access to status 
+						$usrid = explode("-", $authResult['sessionkey']);				//Get userid from session key stored as password
+					
+							//Call function to retreive facebook status
+						$facebook = $authResult['fbobj'];
+						$status = $facebook->api_client->call_method("facebook.status.get", array('uid'=>$usrid[1], 'limit'=>$count));
+						$profile_url = $facebook->api_client->users_getInfo($usrid[1], 'profile_url,pic_square'); 
+						$replace .= '<div id="facebookholder" class="'.$theme.'">';
+						$replace .= '<div class="title"><img src="/'.drupal_get_path('module', 'socialmediafeeds').'/images/facebook.png" alt="Facebook Logo" /> Facebook Status</div>';
+						$replace .= '<div class="userinfo"><img src="'.$profile_url[0]['pic_square'].'" border="0" align="absmiddle"/> <a href="'.$profile_url[0]['profile_url'].'" target="_blank">'. $acct[0]['screen_name'] .'</a></div>';
+						
+							//Look through all messages
+						foreach($status as $key1=>$value1){
+							if($key1 % 2) {
+								$row = "even";	
+							} else {
+								$row = "odd";
+							}
+						
+							$replace .= '<li class="'.$row.'">'. socialmediafeeds_format_urls($status[$key1]['message']) .' <div class="created">Posted on '. date("M. d, Y",$status[$key1]['time']) .'</div></li>';
+						}
+					
+						$replace .= '</div>';
+						$text = str_replace($searchStr, $replace, $text);	
+					}
+					
+				break;
+				
+				case "Twitter":
+					
+					$output = "";
+					$usertimeline = "";	
+						//Authenticate User/password for serivce
+  				$authResult = socialmediafeeds_authenticate($acct[0]['screen_name'], $acct[0]['password'], $service);
+  						//If authenicate was successful
+  				if(!empty($authResult['sessionkey'])){
+  					$token = explode("|", $authResult['sessionkey']);
+							//Create new session with App and User Tokens
+						$user_connection = new TwitterOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''), $token[0], $token[1]);
+ 						$usertimeline = $user_connection->get('statuses/user_timeline', array("count"=>$count));	
+					} else {
+  						/* Save HTTP status for error dialog on connnect page.*/
+  						$output = "failed";	
+					}
+
+					if($usertimeline) {
+						$profile_image = $usertimeline[0]->user->profile_image_url;
+						foreach($usertimeline as $key=>$value) {	
+							if($key % 2) {
+								$row = "even";	
+							} else {
+								$row = "odd";
+							}
+							$output .= '<li class="'.$row.'">'. socialmediafeeds_format_urls($usertimeline[$key]->text) .' <div class="created">Posted on '. socialmediafeeds_format_timestamp($usertimeline[$key]->created_at) .' with '.$usertimeline[$key]->source.'</div></li>';
+						}
+						
+							// Show public timeline
+						$replace = '<div id="twitterholder" class="'.$theme.'">';
+						$replace .= '<div class="title"><img src="/'.drupal_get_path('module', 'socialmediafeeds').'/images/twitter.png" alt="Twitter Logo"/> Twitter Status</div>';
+						$replace .= '<div class="userinfo"><img src="'.$profile_image.'" border="0" align="absmiddle"/><a href="http://twitter.com/'.$screen_name.'" >@'.$screen_name .'</a></div>';
+						$replace .=  $output;
+						$replace .= '</div>';
+					
+						//echo "<pre>"; echo $searchStr .",". $replace ; echo "</pre>";
+						
+					} else {
+						$replace = t("Could not connect ".$screen_name." to Twitter.");
+						debugMe($user_connection);
+					}
+					
+					$text = str_replace($searchStr, $replace, $text);
+					
+				break;
+				
+				case "LinkedIn":
+				
+					$output = "";
+					$usertimeline = "";
+						//Authenticate User/password for serivce
+  				$authResult = socialmediafeeds_authenticate($acct[0]['screen_name'], $acct[0]['password'], $service);
+  						//If authenicate was successful
+					if(!empty($authResult['sessionkey'])){
+						$token = explode("|", $authResult['sessionkey']);
+							//Create new session with App and User Tokens
+						$linkedin = new LinkedinOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''), $token[0], $token[1]);
+						$usertimeline = $linkedin->get('v1/people/~:(id,first-name,last-name,picture-url,site-standard-profile-request:(url),current-status,current-status-timestamp)');
+						//$usertimeline = $linkedin->get('v1/people/~/network?type=STAT&count='.$count);	
+					} else {
+  						/* Save HTTP status for error dialog on connnect page.*/
+  						$output = "failed";						
+					}
+					
+					if($usertimeline) {
+						$profile_image = $usertimeline['picture-url'];
+						$screen_name = 	$usertimeline['first-name']." ".$usertimeline['last-name'];
+						$profile_url = '<a href="'.$usertimeline['site-standard-profile-request']['url'].'" target="_blank">'.$screen_name.'</a>';
+						$profile_image = $usertimeline['picture-url'];
+						
+						if($usertimeline['current-status']) {
+							$output .= $usertimeline['current-status'] .'('.$usertimeline['current-status-timestamp'] .')';
+						}
+						
+							// loop through list of feeds
+						/*foreach($usertimeline as $key=>$value) {
+							
+							if($key % 2) {
+								$row = "even";	
+							} else {
+								$row = "odd";
+							}
+							
+							$output .= '<li class="'.$row.'">'. $value['current-status'].' <div class="created">Posted on '. socialmediafeeds_format_timestamp($usertimeline[$key]->created_at) .' with '.$usertimeline[$key]->source.'</div></li>';
+							
+						}*/
+						
+							// Show public timeline
+						$replace = '<div id="linkedinholder" class="'.$theme.'">';
+						$replace .= '<div class="title"><img src="/'.drupal_get_path('module', 'socialmediafeeds').'/images/linkedin.png" alt="LinkedIn Logo"/> LinkedIn Status</div>';
+						$replace .= '<div class="userinfo"><img src="'.$profile_image.'" border="0" align="absmiddle"/> '.$profile_url.'</div>';
+						$replace .=  $output;
+						$replace .= '</div>';	
+					} else {
+						$replace = t("Could not connect ".$screen_name." to ".$service .".");
+						debugMe($user_connection);
+					}
+					
+					$text = str_replace($searchStr, $replace, $text);
+					
+				break;
+			}
+			
+		}
+	
+	}
+	
+	return $text;
+	
+}
+
+
+	/***
+	*  Format Twitter String Date to friendly date
+	*/
+function socialmediafeeds_format_timestamp($str) { 
+	return date("m/d/Y h:ia", strtotime($str)); 
+} 
+
+	/***
+	Implementation of hook_nodeapi().
+	 - Intercepts newly published nodes and posts noticed to social networks.
+	*/
+function socialmediafeeds_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+
+	switch ($op) {
+ 		case 'insert':
+    	case 'update':
+      
+      		if (!empty($node->socialmediafeeds) && !empty($node->socialmediafeeds['status'])) {
+        
+        			//Get ID of logged in user
+				global $user; $drupal_user = $user;
+		
+					//Format status string using replacement markers
+				$replacements = array('!title' => $node->title,
+								  '!url' => url('node/'. $node->nid, array('absolute' => TRUE, 'alias' => TRUE)),
+								  '!url-alias' => url('node/'. $node->nid, array('absolute' => TRUE)),
+								  '!user' => $node->name);
+					// Only generate the shortened URL if it's going to be used. No sense
+					// burning through TinyURLs without a good reason.
+				if (strstr($node->socialmediafeeds['status'], '!tinyurl') !== FALSE) {
+			  		$replacements['!tinyurl'] = socialmediafeeds_shorten_url(url('node/'. $node->nid, array('absolute' => TRUE)));
+				}
+				$status = strtr($node->socialmediafeeds['status'], $replacements);
+		
+				$socialmediafeeds_accounts =  socialmediafeeds_accounts($drupal_user->uid, $serviceid);
+			
+					//Cycle through each screen_name
+				foreach($socialmediafeeds_accounts as $key=>$socialaccount) {
+						//See if checkbox was selected for each account
+					if(!empty($node->socialmediafeeds['account-'.$socialmediafeeds_accounts[$key]['screen_name']])) {
+						socialmediafeeds_post($socialmediafeeds_accounts[$key]['service'], $socialmediafeeds_accounts[$key], $status);		
+					}
+			
+				}
+		
+				$socialmediafeeds_globalaccounts =  socialmediafeeds_get_global_accounts();
+				
+					//Cycle through each screen_name
+				foreach($socialmediafeeds_globalaccounts as $key1=>$socialaccount1) {
+						//See if checkbox was selected for each account
+					if(!empty($node->socialmediafeeds['account-'.$socialmediafeeds_globalaccounts[$key1]['screen_name']])) {
+						
+						if(variable_get('socialmediafeeds_disableoveride_global') || variable_get('socialmediafeeds_hide_global')) {
+							$status = strtr(variable_get('socialmediafeeds_global_status'), $replacements);
+						}
+						socialmediafeeds_post($socialmediafeeds_globalaccounts[$key1]['service'], $socialmediafeeds_globalaccounts[$key1], $status);		
+					}
+			
+				}
+		
+     	 	}
+      
+     	break;
+  	}
+}
+
+	/**
+	 * Very lightweight helper function to generate a TinyURL for a given post.
+	 */
+function socialmediafeeds_shorten_url($url) {
+  if (module_exists('shorten')) {
+    return shorten_url($url);
+  }
+  else {
+    $response = drupal_http_request("http://tinyurl.com/api-create.php?url=" . $url);
+    if ($response->code == 200) {
+      return $response->data;
+    }
+    else {
+      return $url;
+    }
+  }
+}
+
+
+	/**
+	*	 Initiate posting to social media service 
+	*/
+function socialmediafeeds_post($service, $acct = array(), $status) {
+	if(!$service){
+		return false;
+	}
+	$result =  socialmediafeeds_set_status($acct['screen_name'], $acct['password'], $status, $service);
+	if($result['code'] == "success") {
+		drupal_set_message(t('Successfully posted to '.$acct['screen_name'].' on '. $service));
+	} else {
+		drupal_set_message(t('An error occurred when posting to '.$service.': %code %error',
+			array('%code' => $result['code'], '%error' => $result['error'])), 'warning');
+	}
+
+}
+
+
+	/**
+	*  Call to interact with social media API to post status message
+	*/
+function socialmediafeeds_set_status($screen_name, $password, $text, $service, $source = 'Wall of Cool') {
+	
+	switch($service) {
+	
+		case "Facebook":	
+			$authResult = socialmediafeeds_authenticate($screen_name, $password, $service);	//Authenticate User/password for serivce
+	
+				//If authenicate was successful
+			if(!empty($authResult['sessionkey'])){
+				$facebook = $authResult['fbobj'];							//Get FB OBJ from authentication request
+				$facebook->api_client->stream_publish($text);	//Call FB API to post status
+				return array("code"=>"success");
+			} else {
+				return array("code"=>"fail", "error"=>t('Problem setting Facebook status'));
+			}
+			break;
+		
+		case "LinkedIn":
+		
+				//Authenticate User/password for serivce
+			$authResult = socialmediafeeds_authenticate($screen_name, $password, $service);
+	
+				//If authenicate was successful
+			if(!empty($authResult['sessionkey'])){
+	
+				$token = explode("|", $authResult['sessionkey']);
+
+					//Create new session with App and User Tokens
+				$linkedin = new LinkedinOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''), $token[0], $token[1]);
+				$xmltext = '<current-status>'.htmlspecialchars($text, ENT_NOQUOTES, "UTF-8").'</current-status>';
+				$statusUpdate = $linkedin->setStatus($text);
+
+					//Check results
+				switch ($linkedin->http_status) {
+					case 200:
+						return array("code"=>"success");
+					break;
+					case 204:
+						return array("code"=>"success");
+					break;
+					default:
+						return array("code"=>"fail", "error"=>t('Problem setting LinkedIn status, code:'. $linkedin->http_status));
+					break;
+				}
+
+			} else {
+		
+					//if error included in result, return it, otherwise return generic error message
+				if(!empty($authResult['error'])) {
+					return array("code"=>"fail", "error"=>$authResult['error']);
+				} else {
+					return array("code"=>"fail", "error"=>t('Could not authenticate with LinkedIn'));
+				}
+			}
+		
+			break;
+		
+		case "Twitter":
+  			$authResult = socialmediafeeds_authenticate($screen_name, $password, $service);		//Authenticate User/password for serivce
+  
+  				//If authenicate was successful
+  			if(!empty($authResult['sessionkey'])){
+  				$token = explode("|", $authResult['sessionkey']);	// Extract tokens from auth result
+					//Create new session with App and User Tokens
+					$user_connection = new TwitterOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''), $token[0], $token[1]);
+  				$statusUpdate = $user_connection->post('statuses/update', array("status"=>$text, "source"=>$source));
+  				if(!empty($statusUpdate->id)) {
+  		 			return array("code"=>"success");
+  				} else {
+  		 			return array("code"=>"fail", "error"=>t('Problem setting Twitter status'));
+  				}
+  			} else {
+  					//if error included in result, return it, otherwise return generic error message
+  				if(!empty($authResult['error'])) {
+  					return array("code"=>"fail", "error"=>$authResult['error']);
+  				} else {
+  					return array("code"=>"fail", "error"=>t('Could not authenticate with Twitter'));
+  				}
+  			}
+  			
+		break;
+	}
+}
+
+
+
+	/**
+	 * Attempts to authenticate a username/password on Twitter.com.
+	 *
+	 * @param $screen_name
+	 *   The screen name of a Twitter.com user.
+	 * @param $password
+	 *   The password of a Twitter.com user.
+	 * @return
+	 *   A boolean indicating success or failure.
+	 */
+function socialmediafeeds_authenticate($screen_name, $password, $service) {
+  
+  if(!$password) {
+  	return false;
+  }
+  
+  switch($service) {
+	
+		case "Twitter":
+			
+				//Include twitter API PHP libraries
+			module_load_include('php', 'socialmediafeeds', 'twitter/twitteroauth');
+			
+				//Get oauth tokens stored as password
+			$token = explode("|", $password);
+			
+				//Create new session with App and User Tokens
+			$user_connection = new TwitterOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''), $token[0], $token[1]);
+			
+				//Call to verify creditals
+			$authRequest = $user_connection->get('account/verify_credentials');
+			
+					//Check results
+			switch ($user_connection->http_code) {
+				case 200:
+					/* Build authorize URL */
+					return array(
+						"sessionkey"=>$password,
+						"screen_name"=>$screen_name,
+						);
+				break;
+				default:
+					return array("error"=>t('Could not connect to Twitter. Refresh the page or try again later.'));
+				break;
+			}
+			
+			break;
+
+		case "LinkedIn":
+		
+			//Include twitter API PHP libraries
+			module_load_include('php', 'socialmediafeeds', 'linkedin/linkedinoauth');
+			
+				//Get oauth tokens stored as password
+			$token = explode("|", $password);
+
+				/* Create LinkedIn Obj with api keys */ 
+			$linkedin = new LinkedinOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''), $token[0], $token[1]);
+	
+				/* Request LinkedIn profile fields */
+			$authRequest = $linkedin->get('v1/people/~');
+			
+				/* Check to see if http status returned successful */
+			switch($linkedin->http_status) {
+				case 200:
+					$authData = array(
+							"sessionkey"=>$password,
+							"screen_name"=>$screen_name,
+					);
+					return $authData;
+					break;
+				default:
+					return array("error"=>t('Could not authorize LinkedIn session. Try refreshing the page or again later.'));
+					break;
+			}
+			break;
+	
+		case "Facebook":
+					
+				//Include facebook API PHP libraries
+			module_load_include('php', 'socialmediafeeds', 'facebook/facebook');
+			module_load_include('php', 'socialmediafeeds', 'facebook/lib');
+					
+				//Create new facebook instance
+			$facebook = new Facebook(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''));
+			
+			$usrid = split($password,"-");
+			
+			//print_r($usrid);
+			
+				//Set User
+			$facebook->api_client->user = $usrid[1];
+			$facebook->api_client->session_key = $password;
+			
+			
+				//Check of current facebook session exists
+			//$fb_user=$facebook->get_loggedin_user();
+			$streampublish = $facebook->api_client->users_hasAppPermission("publish_stream");
+			//echo $streampublish;
+			if(!$streampublish) {
+				return false;
+			} else {
+				
+				$user_details = array(
+								'sessionkey' => $password,
+								'screen_name' => $screen_name,
+								'fbobj'=>$facebook,
+				);
+			
+				return $user_details;
+				
+			}
+			
+			break;
+	}
+}
+
+	/**
+	 * Internal helper function to deal cleanly with various HTTP response codes.
+	 */
+function socialmediafeeds_request_failure($results) {
+  switch ($results->code) {
+    case '304':
+      // 304 Not Modified: there was no new data to return.
+      return TRUE;
+    case 400:
+      // 400 Bad Request: your request is invalid, and we'll return an error message that tells you why. This is the status code returned if you've exceeded the rate limit
+      watchdog('twitter', '400 Bad Request.');
+      return TRUE;
+    case 401:
+      // 401 Not Authorized: either you need to provide authentication credentials, or the credentials provided aren't valid.
+      watchdog('twitter', '401 Not Authorized.');
+      return TRUE;
+    case 403:
+      // 403 Forbidden: we understand your request, but are refusing to fulfill it.  An accompanying error message should explain why.
+      watchdog('twitter', '403 Forbidden.');
+      return TRUE;
+    case 404:
+      // 404 Not Found: either you're requesting an invalid URI or the resource in question doesn't exist (ex: no such user). 
+      watchdog('twitter', '404 Not Found.');
+      return TRUE;
+    case 500:
+      // 500 Internal Server Error: we did something wrong.  Please post to the group about it and the Twitter team will investigate.
+      watchdog('twitter', '500 Internal Server Error.');
+      return TRUE;
+    case 502:
+      // 502 Bad Gateway: returned if Twitter is down or being upgraded.
+      watchdog('twitter', '502 Bad Gateway.');
+      return TRUE;
+    case 503:
+      // 503 Service Unavailable: the Twitter servers are up, but are overloaded with requests.  Try again later.
+      watchdog('twitter', '503 Service Unavailable.');
+      return TRUE;
+  }
+  // 200 OK: everything went awesome.
+  return FALSE;
+}
+
+
+	/**
+	 * Handle setting up or parsing twitter requests and reponses
+	 *
+	 * @param $uid
+	 *	  UID of the drupal user with the account
+	 * @param $global
+	 * 	  Flag to determine if account is global or not
+	 * @return 
+	 * 	  If twitter response, redirect to account page
+	 * 	  If making request, return url for twitter
+	 */
+function socialmediafeeds_twitter_auth_confirm($uid, $global = false){
+
+	$service = "Twitter";
+      // Include twitter API PHP libraries
+	module_load_include('php', 'socialmediafeeds', 'twitter/twitteroauth');
+
+		/* See if Twitter has returned our request with a oauth verifier */
+	if($_REQUEST['oauth_verifier']){
+	
+			// Establish new Twitter Connection with tokens from application approval
+		$twitter = new TwitterOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''), $_SESSION['taccess_oauth_token'], $_SESSION['taccess_token_secret']);
+			
+			// Contruct user tokens from auth varifier to save for future access.
+		$token = $twitter->getAccessToken($_REQUEST['oauth_verifier']);
+
+		switch($twitter->http_code) {
+			case 200:
+  				/* The user has been verified and the access tokens can be saved for future use */
+  				$_SESSION['taccess_oauth_token'] = $token['oauth_token'];
+  				$_SESSION['taccess_token_secret'] = $token['oauth_token_secret'];
+  				$_SESSION['toauth_verifier'] = 'verified';
+  			break;
+  			
+  			default:
+  				$test = 'Unable to get access token, server returned error #'.$twitter->http_code;
+  				drupal_set_message($test);
+  				watchdog('Social Media Feeds', $test);
+  			break;
+  		}	
+
+			// Redirect to admin if global param set
+		if($global == 'global') {
+			$url = 'admin/settings/socialmediafeeds/globalaccounts';
+		} else {
+			$url = 'user/'.$uid.'/edit/socialmediafeeds';
+		}
+
+		drupal_goto($url);
+	
+	} else {
+	
+			/* Create Twitter Obj & get Request Token to store in session for future use */
+		$twitter = new TwitterOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''));	//Create Twitter OAuth Object
+		$request_token = $twitter->getRequestToken(socialmediafeeds_createCallbackUrl($uid, strtolower($service), $global));	//Get Tokens to make requests
+		$_SESSION['taccess_oauth_token'] = $request_token['oauth_token'];
+		$_SESSION['taccess_token_secret'] = $request_token['oauth_token_secret'];
+        //echo "<pre>"; print_r($twitter); echo "</pre>";
+
+			/* Check http code to see if call successful */
+		switch ($twitter->http_code) {
+  		case 200:
+    		/* Build authorize URL */
+    		$url = $twitter->getAuthorizeURL($request_token);
+    		unset($twitter);
+    		header('Location: ' . $url); 
+   		break;
+  		default:
+  			unset($twitter);
+  			$text = t('Unable to get request token from Twitter, server returned error #'.$twitter->http_code);
+    		drupal_set_message($text);
+    		watchdog('Social Media Feeds', $text);
+    	break;
+		}
+	
+	}
+	
+}
+
+	/**
+	 * Handle setting up or parsing twitter requests and reponses
+	 *
+	 * @param $uid
+	 *	  UID of the drupal user with the account
+	 * @param $global
+	 * 	  Flag to determine if account is global or not
+	 * @return 
+	 * 	  If twitter response, redirect to account page
+	 * 	  If making request, return url for twitter
+	 */
+function socialmediafeeds_linkedin_auth_confirm($uid, $global = 'personal'){
+
+	$service = "LinkedIn";
+      // Include twitter API PHP libraries
+	module_load_include('php', 'socialmediafeeds', 'linkedin/linkedinoauth');
+
+		//See if Twitter has returned our request with a oauth verifier
+	if($_REQUEST['oauth_verifier']){
+	
+			// Establish new Twitter Connection with tokens from application approval
+		$linkedin = new LinkedinOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''), $_SESSION['laccess_oauth_token'], $_SESSION['laccess_token_secret']);
+			
+			// Contruct user tokens from auth varifier to save for future access.
+		$token = $linkedin->getAccessToken($_REQUEST['oauth_verifier']);
+		
+		switch($linkedin->http_status) {
+			case 200:
+  				/* The user has been verified and the access tokens can be saved for future use */
+  				$_SESSION['laccess_oauth_token'] = $token['oauth_token'];
+  				$_SESSION['laccess_token_secret'] = $token['oauth_token_secret'];
+  				$_SESSION['loauth_verifier'] = 'verified';
+  			break;
+  			
+  			default:
+  				$test = 'Unable to get access token, server returned error #'.$linkedin->http_status;
+  				drupal_set_message($test);
+  				watchdog('Social Media Feeds', $test);
+  			break;
+  		}	
+		
+			// Redirect to admin if global param set.
+		if($global == 'global') {
+			$url = 'admin/settings/socialmediafeeds/globalaccounts';
+		} else {
+			$url = 'user/'.$uid.'/edit/socialmediafeeds';
+		}
+		
+		drupal_goto($url);
+		
+	} else {
+	
+			// Create LinkedIn Obj & get Request Token to store in session for future use
+		$linkedin = new LinkedinOAuth(variable_get('socialmediafeeds_'.strtolower($service).'_apikey', ''), variable_get('socialmediafeeds_'.strtolower($service).'_secretkey', ''));	//Create Twitter OAuth Object
+        $request_token = $linkedin->getRequestToken(socialmediafeeds_createCallbackUrl($uid, strtolower($service), $global));	/* Get Tokens to make requests */
+		$_SESSION['laccess_oauth_token'] = $request_token['oauth_token'];
+		$_SESSION['laccess_token_secret'] = $request_token['oauth_token_secret'];
+
+			// Check http code to see if call successful
+		switch ($linkedin->http_status) {
+  		case 200:
+    		// Build authorize URL
+    		$url = $linkedin->getAuthorizeURL($request_token);
+    		//echo "<pre>"; print_r($url); echo "</pre>";
+            unset($linkedin);
+    		header('Location: ' . $url); 
+          break;
+  		default:
+  			unset($linkedin);
+  			$text = t('Unable to get request token from LinkedIn, server returned error #'.$linkedin->http_status);
+    		drupal_set_message($text);
+    		watchdog('Social Media Feeds', $text);// Redirect to admin if global param set.
+            if($global == 'global') {
+              $url = 'admin/settings/socialmediafeeds/globalaccounts';
+            } else {
+              $url = 'user/'.$uid.'/edit/socialmediafeeds';
+            }
+            drupal_goto($url);
+          break;
+		}
+
+       
+	}
+	
+}
+
+
+	/**
+	 * Construct return url for service to return user
+	 * 
+	 * @param $uid
+	 *   The Drupal UID of the 
+	 * @param $global
+	 *   Is account global
+	 * @return
+	 *   A string containing the url for twitter to return after auth
+	 */
+function socialmediafeeds_createCallbackUrl($uid, $service, $global = false){
+	$pageURL = (@$_SERVER["HTTPS"] == "on") ? "https://" : "http://";
+	
+	if ($_SERVER["SERVER_PORT"] != "80") {
+    	$pageURL .= $_SERVER["SERVER_NAME"].":".$_SERVER["SERVER_PORT"]."/socialmediafeeds/{$service}_confirm/$uid/$global";
+	} else {
+    	$pageURL .= $_SERVER["SERVER_NAME"]."/socialmediafeeds/{$service}_confirm/$uid/$global";
+    }
+	return $pageURL;
+}
+
+	/**
+	 * Construct relative time based on date
+	 * 
+	 * @param $date
+	 *	 Date and time of the time to format
+	 * @return 
+	 * 	 Return string based on relative time provided.
+	 */
+function getRelativeTime($date) {
+	$diff = time() - strtotime($date);
+	if ($diff<60)
+		return $diff . " second" . plural($diff) . " ago";
+	$diff = round($diff/60);
+	if ($diff<60)
+		return $diff . " minute" . plural($diff) . " ago";
+	$diff = round($diff/60);
+	if ($diff<24)
+		return $diff . " hour" . plural($diff) . " ago";
+	$diff = round($diff/24);
+	if ($diff<7)
+		return $diff . " day" . plural($diff) . " ago";
+	$diff = round($diff/7);
+	if ($diff<4)
+		return $diff . " week" . plural($diff) . " ago";
+	return "on " . date("F j, Y", strtotime($date));
+}
+
+
+	/*
+	 * Implementation of hook_theme().
+	 *		create entries for all module specific themed functions
+	 */
+/*function socialmediafeeds_theme() {
+	$theme = array(
+    	'socialmediafeeds' => array(
+      		'arguments' => array(
+        		'element' => NULL,)
+		),
+  );
+  
+   return $theme;
+
+}*/
+
+/**
+ * Implementation of hook_wysiwyg_plugin().
+ *
+ * This adds plugins to the FCKEditor through WYSIWYG API module
+ */
+/*function socialmediafeeds_wysiwyg_plugin($editor, $version) {
+  static $integrated = array();
+
+  // Load our invocation scripts.
+  if (empty($integrated)) {
+    $modulepath = drupal_get_path('module', 'socialmediafeeds');
+    //$path = drupal_get_path('module', 'imce_wysiwyg');
+    //drupal_add_js($imcepath . '/js/imce.js');
+   // drupal_add_js($imcepath . '/js/imce_set_app.js');
+    drupal_add_js($modulepath . '/js/socialmediafeeds.js');
+  }
+
+  switch ($editor) {
+    case 'fckeditor':
+      $integrated[$editor] = TRUE;
+      return array(
+        'socialmedia' => array(
+          'type' => 'external',
+          'title' => t('My plugin title'),
+          'description' => t('My plugin title'),
+          // Regular callback URL for external TinyMCE plugins.
+          'path' => $path . '/socialmedia',
+          // Wysiwyg wrapper plugin AJAX callback.
+          'callback' => url('socialmedia/fckplugin.js'),
+          'icon' => drupal_get_path('module', 'socialmediafeeds') . '/socialmedia/share.jpg',
+          //'extended_valid_elements' => array('tag[attribute1|attribute2=default_value]'),
+          // Might need to be set later on; after retrieving customized editor
+          // layout.
+         // 'theme_advanced_buttons1' => array(t('Button title (optional)') => 'myplugin'),
+        ),
+
+      );
+  }
+}*/
+
+/**
+ * Implementation of hook_views_api.
+ * Notifies the Views module that we're compatible with a particular API revision.
+ */
+function socialmediafeeds_views_api() {
+  return array('api' => 2);
+}

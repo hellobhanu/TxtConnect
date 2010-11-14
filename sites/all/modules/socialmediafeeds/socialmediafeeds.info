@@ -1,0 +1,5 @@
+; $Id: $
+name = Social Media Feeds
+description = "Enable the display of social media feeds on the site"
+core = 6.x
+version = "6.x-1.0"

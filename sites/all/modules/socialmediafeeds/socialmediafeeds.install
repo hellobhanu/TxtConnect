@@ -1,0 +1,219 @@
+<?php
+// $Id: socialmediafeeds.install,v 0.1 2009/9/23 12:00:00 ber Exp $
+
+/**
+ * @file
+ * Installation/updates for Preview Generator.
+ */
+
+function socialmediafeeds_schema() {
+	$schema['socialmediafeeds_useraccounts'] = array(
+		'fields' => array(
+		  'sid' => array(
+			'description' => t("Primary Unique ID"),
+			'type' => 'serial',
+			'unsigned' => TRUE,
+			'not null' => TRUE
+		  ),
+		  'uid' => array(
+			'description' => t("The Drupal ID of the user account associated with the social network account."),
+			'type' => 'int',
+			'not null' => FALSE
+		  ),
+		  'screen_name' => array(
+			'description' => t("The unique login name for the account."),
+			'type' => 'varchar',
+			'length' => 255,
+			'not null' => TRUE,
+			'default' => '',
+		  ),
+		  'password' => array(
+			'description' => t("The password for the account."),
+			'type' => 'varchar',
+			'length' => 512,
+		  ),
+		  'service' => array(
+			'description' => t("Social network service name"),
+			'type' => 'varchar',
+			'length' => 255
+		  ),
+		  'placement' => array(
+			'description' => t("Location of Status Block"),
+			'type' => 'varchar',
+			'length' => 50
+		  ),
+		  'autopost' => array(
+			'description' => t("Auto Post to social network"),
+			'type' => 'int',
+			'length' => 11
+		  ),
+		  'count' => array(
+			'description' => t("Number of objects to retreive"),
+			'type' => 'int',
+			'length' => 11
+		  ),
+		),
+		'primary key' => array('sid'),
+	  );
+	
+	$schema['socialmediafeeds_globalaccounts'] = array(
+		'fields' => array(
+		  'sid' => array(
+			'description' => t("Primary Unique ID"),
+			'type' => 'serial',
+			'unsigned' => TRUE,
+			'not null' => TRUE
+		  ),
+		  'uid' => array(
+			'description' => t("The Drupal ID of the user account associated with the social network account."),
+			'type' => 'int',
+			'not null' => FALSE
+		  ),
+		  'screen_name' => array(
+			'description' => t("The unique login name for the account."),
+			'type' => 'varchar',
+			'length' => 255,
+			'not null' => TRUE,
+			'default' => '',
+		  ),
+		  'password' => array(
+			'description' => t("The password for the account."),
+			'type' => 'varchar',
+			'length' => 512,
+		  ),
+		  'service' => array(
+			'description' => t("Social network service name"),
+			'type' => 'varchar',
+			'length' => 255
+		  ),
+		  'autopost' => array(
+			'description' => t("Auto Post to social network"),
+			'type' => 'int',
+			'length' => 11
+		  ),
+		),
+		'primary key' => array('sid'),
+	  );
+	
+	
+	$schema['socialmediafeeds_services'] = array(
+		'fields' => array(
+		  'sid' => array(
+			'description' => t("Primary Unique ID"),
+			'type' => 'serial',
+			'unsigned' => TRUE,
+			'not null' => TRUE
+		  ),
+		  'name' => array(
+			'description' => t("Service name"),
+			'type' => 'varchar',
+			'not null' => TRUE,
+			'length' => 255,
+		  ),
+		  'apikey' => array(
+			'description' => t("API key"),
+			'type' => 'varchar',
+			'length' => 255,
+		  ),
+		  'secretkey' => array(
+			'description' => t("Secret key"),
+			'type' => 'varchar',
+			'length' => 255,
+		  ),
+		  'active' => array(
+			'description' => t("Active"),
+			'type' => 'int',
+			'length' => 11,
+		  ),
+		),
+		'primary key' => array('sid'),
+	  );
+	
+	return $schema;
+}
+
+	/**
+	 * Implementation of hook_install().
+	 */
+function socialmediafeeds_install() {
+  		// Create tables.
+	drupal_install_schema('socialmediafeeds');
+	drupal_set_message(t('socialmediafeeds_useraccounts database table created.'));
+	
+}
+
+	/**
+	 * Implementation of hook_update().
+	 * 
+	 * Adds autopost column to socialmediafeeds_useraccounts table
+	 *
+	 */
+function socialmediafeeds_update_6100(){
+	$ret = array();
+	
+	db_add_field($ret, 'socialmediafeeds_useraccounts', 'autopost', array('type' => 'int', 'default'=>0));
+	
+	$ret[] = update_sql('UPDATE {socialmediafeeds_useraccounts} SET autopost = 0');
+
+	return $ret;
+}
+
+	/**
+	 * Implementation of hook_update().
+	 * 
+	 * Adds placement column to socialmediafeeds_useraccounts table
+	 *
+	 */
+function socialmediafeeds_update_6101(){
+	$ret = array();
+	
+	db_add_field($ret, 'socialmediafeeds_useraccounts', 'placement', array('type' => 'varchar', 'length'=>50));
+	
+	$ret[] = update_sql('UPDATE {socialmediafeeds_useraccounts} SET placement = "right"');
+
+	return $ret;
+}
+
+	/**
+	 * Implementation of hook_update().
+	 * 
+	 * Adds count column to socialmediafeeds_useraccounts table
+	 *
+	 */
+function socialmediafeeds_update_6102(){
+	$ret = array();
+	
+	db_add_field($ret, 'socialmediafeeds_useraccounts', 'count', array('type' => 'int', 'length'=>9));
+	
+	$ret[] = update_sql('UPDATE {socialmediafeeds_useraccounts} SET placement = "right"');
+
+	return $ret;
+}
+
+
+
+	/**
+	 * Implementation of hook_uninstall().
+	 */
+function socialmediafeeds_uninstall() {
+  $result = db_query('SELECT name FROM {variable} v WHERE LOCATE("socialmediafeeds_",v.name) > 0');
+  while ($row = db_fetch_object($result)){
+     variable_del($row->name);
+  }
+  drupal_uninstall_schema('socialmediafeeds'); 
+  drupal_set_message(t('socialmediafeeds_useraccounts database table deleted.'));
+}
+
+/**
+ * Clear cache.
+ */
+//function previewgenerator_update_6100() {
+//  $ret = array();
+//
+//  // We want to remove cache entries that were added as CACHE_PERMANENT. The
+//  // cid's depend on the taxonomies involved but we can just remove anything
+//  // with a cid prefixed tagadelic_cache_
+//  $ret[] = update_sql("DELETE FROM {cache} WHERE cid LIKE 'previewgenerator_%'");
+//
+//  return $ret;
+//}
