@@ -3,7 +3,7 @@
 
 /**
  * @file
- * Installation/updates for Preview Generator.
+ * Installation/updates for txtconnect.
  */
 
 function txtconnect_schema() {
@@ -24,7 +24,6 @@ function txtconnect_schema() {
 			'description' => t("The Drupal ID of the user receiving"),
 			'type' => 'int',
 			'not null' => TRUE,
-			'default' => '',
 		  ),
 		  'message' => array(
 			'description' => t("included message"),

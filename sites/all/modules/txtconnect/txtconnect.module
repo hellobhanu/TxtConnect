@@ -57,8 +57,8 @@ function txtconnect_menu() {
 		'type' => MENU_CALLBACK
 	);
 
-    $items['twilio_send'] = array(
-		'page callback' => 'txtconnect_twilio_send',
+    $items['twilio_query'] = array(
+		'page callback' => 'txtconnect_twilio_query',
 		'title'  => t('twilio send'),
 		'access callback' => true,
 		'type' => MENU_CALLBACK
@@ -79,48 +79,6 @@ function txtconnect_menu() {
 }
 
 
-function txtconnect_twilio_send(){
-
-  
-  $module_path = drupal_get_path('module', 'txtconnect');
-  require $module_path."/twilio/twilio.php";
-
-  
-  $AccountSid = 'AC7fb96c3d990117b3734a337ff797c248';
-  $AuthToken = '45c46c4ea3be1704bcb2d34529ade1ff';
-
-    /* Twilio REST API version */
-  $ApiVersion = "2010-04-01";
-
-    // Outgoing Caller ID you have previously validated with Twilio
-  $CallerID = '4155992671';
-
-
-
-  $base_url = 'https://'.$acct.':'. $authtoken .'@api.twilio.com/2010-04-01';
-
-  $url = $base_url .'/Accounts/'.$acct .'/SMS/Messages';
-
-  $output = 'from='. $acct .'&to=&body=6408-8559 testme';
-  
-
-  /* Instantiate a new Twilio Rest Client */
-	$client = new TwilioRestClient($AccountSid, $AuthToken);
-
-	/* Initiate a new outbound call by POST'ing to the Calls resource */
-	$response = $client->request("/$ApiVersion/Accounts/$AccountSid/SMS/Messages",
-		"POST", array(
-		"From" => $CallerID,
-		"To" => "206-375-6133",
-		"Body" => "testme"
-
-	));
-	if($response->IsError)
-		echo "Error: {$response->ErrorMessage}";
-	else
-		echo "Send SMS: {$response->ResponseXml->Call->Sid}";
-
-}
 
 function txtconnect_twilio_callback(){
 
@@ -145,7 +103,8 @@ function txtconnect_twilio_callback(){
 
     $to_number = $bodyArray[0];
     $relmessage = $bodyArray[1];
-    // TODO: normalize to_number from body
+
+// TODO: normalize to_number from body
     //http://forum.statcounter.com/vb/archive/index.php/t-26326.html
     //http://forum.civicrm.org/index.php?topic=9767.0
     //http://www.jonra.com/temp/cleanphone.php
@@ -175,12 +134,13 @@ function txtconnect_twilio_callback(){
       );           
       $to_user = user_save(null, $newUser);
 
-      //TODO: Send welcome sms to new user
-      
+// TODO: Send welcome sms to new user
+      //txtconnect_twilio_send($to_number, "6408-8559 Welcome to www.txtconnect.net, login with your phone number and code: ". $code);
+      txtconnect_twilio_send("2063756133", "6408-8559 Welcome to www.txtconnect.net, login with your phone number ".$to_number." and code: ". $code);
     }
 
       // Associate both accounts
-    txtconnect_create_relationship($from_user->uid, $to_user->uid);
+    txtconnect_create_relationship($from_user->uid, $to_user->uid, $relmessage);
 
   }
 
@@ -195,7 +155,54 @@ function txtconnect_twilio_callback(){
 
 }
 
+/*
+ * Send SMS to phone number
+ *
+ * @param $number - phone number to send
+ * @param $msg - message to send in SMS
+ */
+function txtconnect_twilio_send($number, $msg){
 
+    // Include twilio lib
+  $module_path = drupal_get_path('module', 'txtconnect');
+  require $module_path."/twilio/twilio.php";
+
+    // contruct twilio account and API token
+  $AccountSid = 'AC7fb96c3d990117b3734a337ff797c248';
+  $AuthToken = '45c46c4ea3be1704bcb2d34529ade1ff';
+
+    /* Twilio REST API version */
+  $ApiVersion = "2010-04-01";
+
+    // Outgoing Caller ID you have previously validated with Twilio
+  $CallerID = '4155992671';
+
+  /* Instantiate a new Twilio Rest Client */
+  $client = new TwilioRestClient($AccountSid, $AuthToken);
+
+  /* Initiate a new outbound call by POST'ing to the Calls resource */
+  $response = $client->request("/$ApiVersion/Accounts/$AccountSid/SMS/Messages",
+      "POST", array(
+        "From" => $CallerID,
+        "To" => $number,
+        "Body" => $msg,
+      )
+  );
+
+  if($response->IsError) {
+      //echo "Error: {$response->ErrorMessage}";
+      watchdog("Txt Connect", $response->ErrorMessage);
+  } else {
+      //echo "Send SMS: {$response->ResponseXml->Call->Sid}";
+      watchdog("Txt Connect", $response->ResponseXml->SMS->Sid);
+  }
+
+}
+
+
+/*
+ *
+ */
 function txtconnect_userexists($number) {
    $search_for = array('name'=>$number);  // create array of fields and values to search
    $userexists = user_load($search_for);        // Load from user if exists
@@ -203,14 +210,18 @@ function txtconnect_userexists($number) {
 }
 
 
+/*
+ *
+ */
 function txtconnect_create_relationship($userA, $userB){
 
     //Query to see if relationship already exists
-  $relExists = db_result(db_query("SELECT 1 FROM {txtconnect_relationship} WHERE from_uid = '%s' AND to_uid = '%s'", $userA, $userB));
+  $relExist = db_result(db_query("SELECT 1 FROM {txtconnect_relationships} WHERE from_uid = '%s' AND to_uid = '%s'", $userA, $userB));
   //db_query('UPDATE r.name, r.type, v.value FROM {txtconnect_relationship} r INNER JOIN {profile_values} v ON f.fid = v.fid WHERE uid = %d', $user->uid);
 
     // if no relationship exists, create it
-  if (!$relExist) {
+  if (!$relExist || empty($relExist)) {
+
       $date_created = date_create();
 
         //Create value array to send to database
@@ -222,16 +233,16 @@ function txtconnect_create_relationship($userA, $userB){
       );
 
         // Enter new database record
-      drupal_write_record('txtconnect_relationship', $rel);
+      drupal_write_record('txtconnect_relationships', $rel);
 
   }
 
 }
 
 
-function txtconnect_querylog(){
+function txtconnect_twilio_query(){
 
-/*
+
   $module_path = drupal_get_path('module', 'txtconnect');
   require $module_path."/twilio/twilio.php";
 
@@ -254,7 +265,7 @@ function txtconnect_querylog(){
     if($response->IsError)
     	echo "Error fetching recent calls: {$response->ErrorMessage}";
     else {
-    	//print_r($response->ResponseXml->SMSMessages->SMSMessage);
+    	print_r($response->ResponseXml->SMSMessages->SMSMessage);
         foreach($response->ResponseXml->SMSMessages->SMSMessage AS $call){
     		if(strtoTime($GLOBALS['dateCreated']) > strtoTime($call->DateCreated)) {
                echo $call->DateCreated;
@@ -266,16 +277,13 @@ function txtconnect_querylog(){
             //echo "TXT from {$call->From} to {$call->To}";
     		//echo " at {$call->StartTime} of length: {$call->Duration}\n";
 
-
-
-
     }
-*/
+
 }
 
-/**
- * Admin/settings form.
- */
+  /**
+   * Admin/settings form.
+   */
 function txtconnect_admin_settings($configuration) {
   
   //$form['sms_twilio_balance'] = array(
