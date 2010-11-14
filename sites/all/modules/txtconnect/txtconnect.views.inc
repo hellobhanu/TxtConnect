@@ -33,7 +33,10 @@ function txtconnect_views_data() {
   $data['txtconnect_relationships']['from_uid'] = array(
         'title' => t('User ID'),
         'help' => t('The user assigned to the social media account'),
-
+        'field' => array(
+          'handler' => 'views_handler_field_user',
+          //'click sortable' => TRUE,
+        ),
         'relationship' => array(
           'base' => 'users',
           'field' => 'uid',
@@ -62,9 +65,9 @@ function txtconnect_views_data() {
           'handler' => 'views_handler_relationship',
           'label' => t('User'),
         ),
-        /*'argument' => array(
+        'argument' => array(
       		'handler' => 'views_handler_argument_user_uid',
-    	),*/
+    	),
       ); //End uid
 
 	// Setup Service Name Field
