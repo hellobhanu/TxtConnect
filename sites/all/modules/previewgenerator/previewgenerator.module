@@ -1,0 +1,784 @@
+<?php
+// $Id: previewgenerator.module,v 0.7 2010/4/19 12:00:00 elimuir Exp $
+
+
+	/**
+	 *	Implementation of hook_help
+	 *		Adds help menu item
+	 */
+function previewgenerator_help($path, $arg) {
+  switch ($path) {
+   case 'admin/help#previewgenerator':
+      return t('Grabs images and creates preview images from URLs');
+  }
+}
+
+
+	/**
+	 * Implementation of hook_perm()
+	 * 		Sets the permissions for the module
+	 */
+function previewgenerator_perm() {
+  return array('administer previewgenerator', 'access previewgenerator');
+}	
+
+	/**
+	 *	Implementation of hook_menu
+	 *		Adds menu items or page callbacks for module 
+	 */
+function previewgenerator_menu() {
+	$items = array();
+   
+	$items['previewgenerator'] = array(  
+		'page callback' => 'previewgenerator_callback',
+		'title'  => t('Preview Generator'),
+		'access callback' => true,
+		'type' => MENU_CALLBACK
+	);
+
+	$items['previewgenerator/getfields/%'] = array(  
+		'page callback' => 'previewgenerator_get_node_fields',
+		'page arguments' => array(2),
+		'title'  => t('Get fields'),
+		'access callback' => true,
+		'type' => MENU_CALLBACK
+	);
+
+
+
+	$items['admin/settings/previewgenerator'] = array(
+		'title' 			=> t('Preview Generator settings'),
+		'description' 		=> t('Preview Generator module settings'),
+		'page callback' 	=> 'drupal_get_form',
+		'page arguments' 	=> array('previewgenerator_admin_settings'),
+		'access arguments' 	=> array('administer previewgenerator'),
+		'type' => MENU_NORMAL_ITEM,
+		'file'				=> 'previewgenerator.admin.inc',
+	);
+
+  return $items;
+}
+
+
+
+	/*
+	 * Implementation of hook_theme().
+	 *		create entries for all module specific themed functions
+	 */
+function previewgenerator_theme() {
+	$theme = array(
+    	'previewgenerator' => array(
+      		'arguments' => array(
+        		'namespace' => NULL,
+        		'path' => '',
+				'alt' => NULL,
+        		'title' => NULL,
+    	)),
+		'previewgenerator_displayform' => array(
+			'arguments' => array('carouselid'=> NULL),
+		),
+		/*'previewgenerator_form_submit' => array(
+			'arguments' => array('form'=> NULL, 'formstate'=>NULL),
+		),*/
+  );
+  
+   return $theme;
+
+}
+
+/**
+ * Format a textfield.
+ *
+ * @param $element
+ *   An associative array containing the properties of the element.
+ *   Properties used:  title, value, description, size, maxlength, required, attributes autocomplete_path
+ * @return
+ *   A themed HTML string representing the textfield.
+ *
+ * @ingroup themeable
+ */
+function theme_previewgenerator_textfield($element) {
+  $size = empty($element['#size']) ? '' : ' size="'. $element['#size'] .'"';
+  $maxlength = empty($element['#maxlength']) ? '' : ' maxlength="'. $element['#maxlength'] .'"';
+  $class = array('form-text', 'imagefetchr');
+  $extra = '';
+  $output = '';
+
+  if ($element['#autocomplete_path'] && menu_valid_path(array('link_path' => $element['#autocomplete_path']))) {
+    drupal_add_js('misc/autocomplete.js');
+    $class[] = 'form-autocomplete';
+    $extra =  '<input class="autocomplete" type="hidden" id="'. $element['#id'] .'-autocomplete" value="'. check_url(url($element['#autocomplete_path'], array('absolute' => TRUE))) .'" disabled="disabled" />';
+  }
+  _form_set_class($element, $class);
+
+  if (isset($element['#field_prefix'])) {
+    $output .= '<span class="field-prefix">'. $element['#field_prefix'] .'</span> ';
+  }
+
+  $output .= '<input type="text"'. $maxlength .' name="'. $element['#name'] .'" id="'. $element['#id'] .'"'. $size .' value="'. check_plain($element['#value']) .'"'. drupal_attributes($element['#attributes']) .' />';
+
+  if (isset($element['#field_suffix'])) {
+    $output .= ' <span class="field-suffix">'. $element['#field_suffix'] .'</span>';
+  }
+
+  return theme('form_element', $element, $output) . $extra;
+}
+
+
+	/*
+	 * Implementation of hook_form_alter().
+	 *		create entries for all module specific themed functions
+	 */
+function previewgenerator_form_alter(&$form, $form_state, $form_id) {
+	
+	$nodeTypes = variable_get('previewgenerator_node_types', array()); 	//Get node types from admin settings
+	
+		//Loop through each node type
+	foreach($nodeTypes as $type) {
+		
+		switch($form_id){ 
+	 
+			case $type.'_node_form':
+	
+			/* if($form['field_video']){
+				$form['field_video']['#suffix'] = '<div id="findvid_container" class=""><a id="findvid_btn" class="pregen_btn">Find Videos</a><div id="vidresults"></div></div>';
+			*/
+			
+				$form['buttons']['#weight'] = 100;
+
+			 
+				//Add CSS and JS for module
+				$previewGenPath = drupal_get_path('module', 'previewgenerator');
+				drupal_add_js($previewGenPath . '/js/jquery.easing.1.3.js');
+				drupal_add_js($previewGenPath .'/js/previewgenerator.js', 'module');
+				drupal_add_css($previewGenPath .'/css/previewgenerator.css', 'module');
+			
+				if(!$form['group_imagefetchr']) {
+			
+					$form['group_imagefetchr'] = array(
+						'#type'=>'fieldset',
+						'#title'=> t('Select Image'),
+						'#description'=> t('Please select an image to asssoicate with the post'),
+						'#collapsed'=>False,
+						'#collapsible'=>True,
+						'#weight'=> 10,
+					);
+			
+
+				}
+
+			if(!$form['group_imagefetchr']) {
+			
+				$form['group_imagefetchr'] = array(
+					'#type'=>'fieldset',
+					'#title'=> t('Select Image'),
+					'#description'=> t('Please select an image to asssoicate with the post'),
+					'#collapsed'=>False,
+					'#collapsible'=>True,
+					'#weight'=> 10,
+				);
+			
+			}
+
+				//Check if there is an existing thumbnail associated with node to automatically set upload thumbnail checkbox to true
+
+			if($form['field_image'][0]['#default_value']['fid'] || $form['group_imagefetchr']['field_image'][0]['#default_value']['fid']){
+
+					$fid = 1;
+				} else {
+					$fid = 0;
+				}
+
+			//$form['group_imagefetchr']['field_image'] = $form['field_image'];
+			//unset($form['field_image']);
+		
+				//Remove title from Thumbnail Image
+			$form['group_imagefetchr']['field_image']['#title'] = '';
+			$form['group_imagefetchr']['field_image'][0]['#title'] = '';													
+			$form['group_imagefetchr']['field_image']['#weight'] = 1;
+			$form['group_imagefetchr']['field_image']['#weight'] = 1;
+			
+
+				$form['group_imagefetchr']['upload'] = array(
+					'#type' => 'checkbox',
+					'#id'=> 'previewgen-checkbox-upload',
+					'#title' => t('Upload Image'),
+					'#tree'			=> true,
+					'#attributes'	=> array('class'=>'upload-toggle'),
+					'#weight'=> 0,
+					'#default_value'=> $fid,
+				);
+
+			
+
+			$form['group_imagefetchr']['selector'] = array(
+				'#type' => 'checkbox',
+				'#id'=> 'previewgen-checkbox-preview',
+				'#title' => 'Generate Image/screenshot',
+				'#tree'			=> true,
+				'#attributes'	=> array('class'=>'preview-toggle'),
+				'#weight'=> 2,
+			);
+
+			
+				$form['group_imagefetchr']['display'] = array(
+					'#type' => 'item',
+					'#value' => theme("previewgenerator_displayform", "previewgenerator1"),
+					'#id'=> 'previewgenerator-display',
+			  		'#weight'=> 3,
+			  		'#attributes'	=> array('class'=>'previewgenerator_fields'),
+				);
+			
+
+				$form['group_imagefetchr']['previewgenerator_file'] = array(
+			  		'#type' => 'hidden',
+			  		'#id'=> 'previewgenerator_file',
+			  		'#weight'=> 5,
+				);
+
+			/*$form['group_imagefetchr']['thumbnail_linkto'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Link to Image',
+				'#id' => "thumbnail_linkto",
+				'#description' => t('Provide a website link to the image you would like to use as a thumbnail.'),
+				'#weight'=> 4,
+				'#attributes'	=> array('class'=>'previewgenerator_fields'),
+			);*/
+
+			// Load content type fields
+			
+			$nodefields = previewgenerator_get_node_fields($type);
+			
+			foreach($nodefields as $field){
+				previewgenerator_add_classname($form[$field]);
+				//$form['#after_build'][] = 'previewgenerator_field_after_build';
+				//$form[$field]['#attributes']['class'] = "imagefetchr";
+				//$form[$field][0]['#attributes']['class'] = "imagefetchr";
+				//echo "<pre>"; print_r($form[$field]); echo "</pre>\n";
+				
+			}
+			
+
+				$form['#submit'][] = 'previewgenerator_form_submit';
+				$form['#validate'][] = 'previewgenerator_form_validate';
+				//echo "<pre>"; print_r($form_state); echo "</pre>";
+				//echo "<pre>"; print_r($form['buttons']); echo "</pre>";
+			break;
+		}
+
+			//echo "<pre>"; print_r($form); echo "</pre>";
+	}
+}
+
+
+function previewgenerator_field_after_build($form, &$form_state) {
+	//echo "<pre>"; print_r($form['type']['#value']); echo "</pre>";
+	$nodefields = previewgenerator_get_node_fields($form['type']['#value']);
+	foreach($nodefields as $field){
+		previewgenerator_add_classname($form[$field]);
+	}
+}
+
+function previewgenerator_add_classname(&$elements) {
+  foreach (element_children($elements) as $key) {
+    if (isset($elements[$key]) && $elements[$key]) {
+
+      // Recurse through all children elements.
+      previewgenerator_add_classname($elements[$key]);
+    }
+  }
+
+	if (isset($elements['#field'])) {
+    $elements['#field']['attributes']['class'][] = 'imagefetchr';
+    //$elements['#field']['columns']['attributes']['class'] = array('imagefetchr');
+  }
+
+  if (!isset($elements['#attributes'])) {
+    $elements['#attributes'] = array();
+  }
+  $elements['#attributes']['class'][] = 'imagefetchr';
+}
+
+	/*
+	 * Implementation of hook_form_validation().
+	 *		Purpose: Define custom events when BLOG NODE FORM is validated
+	 */
+function previewgenerator_form_validate($form, &$form_state) {
+	
+		//Add CSS and JS for module
+	$previewGenPath = drupal_get_path('module', 'previewgenerator');
+	drupal_add_js($previewGenPath . '/js/jquery.easing.1.3.js');
+	drupal_add_js($previewGenPath .'/js/previewgenerator.js', 'module');
+	drupal_add_css($previewGenPath .'/css/previewgenerator.css', 'module');
+	
+	
+	
+	if(empty($form_state['values']['upload']) && empty($form_state['values']['selector'])) {
+		form_set_error('selector', t('Please add an image to represent the post'));
+	}
+	if(!empty($form_state['values']['upload'])) {
+		if(!$form_state['values']['field_image'][0]['fid']) {
+			//$valid = FALSE;
+			form_set_error('field_image', t('No image selected to upload'));
+		}
+		
+	}
+	
+	if(!empty($form_state['values']['selector'])) {
+		
+		if(empty($form_state['values']['previewgenerator_file']) && empty($form_state['values']['thumbnail_linkto'])) {
+			//$valid = FALSE;
+			form_set_error('selector', t('No image selected as thumbnail'));
+		}
+	}
+}
+
+/*
+	 BLOG NODE SUBMIT FORM
+	
+	 Purpose: Define custom events when BLOG NODE FORM is submitted
+	
+	 SourceCode: 
+	  - Programatically creating filefield entries (http://drupal.org/node/330421)
+	*/
+function previewgenerator_form_submit($form, &$form_state){
+
+		//if upload checkbox empty and selector checkbox turned on
+	if(empty($form_state['values']['upload']) && !empty($form_state['values']['selector'])) {
+		
+		if(empty($form_state['node_preview'])) {
+		
+				//Check if url exists in link field
+			if($form_state['values']['previewgenerator_file']) {
+
+				$image = previewgenerator_saveImage($form_state['values']['previewgenerator_file']);	//Call function to create local image thumbnail from url provided 
+				
+				$file = new stdClass();	//Create object to store array info for DB
+					$file->filename = basename($image);
+					$file->filepath = $image;
+					$file->filemime = file_get_mimetype($image);
+					$file->filesize = filesize($image);
+					$file->uid = 3;
+					$file->status = 1;
+					$file->timestamp = time();
+					
+					drupal_write_record('files', $file);	// insert file object into database
+					
+						// Search DB for fid of file just created
+					$file->fid = db_result(db_query("SELECT fid FROM {files} WHERE filename = '%s'",  array(
+						'%s' => basename($image),
+					)));
+				//}
+				
+					//Assign newly created file object to blog node
+				$form_state['values']['field_image'][0] = array(
+						'fid' => $file->fid,
+						'title' => basename($image),
+						'filename' => basename($image),
+						'description' => basename($image),
+						'filepath' => $image,
+						'filesize' => filesize($image),
+						'list'=> 1,
+					);
+			}
+		}
+		
+	}
+		/*USED FOR DEBUG*/
+	//$form_state['redirect'] = "";
+	//echo "<pre>"; print_r($form); echo "</pre>";
+	//echo "<pre>"; print_r($form_state); echo "</pre>";
+	return;
+}
+
+
+function previewgenerator_file_references($file) {
+  // Report a reference for every file.
+  return array('previewgenerator' => 1);
+}
+
+
+	/*
+	 CREATE THUMBNAIL FROM URL
+	 
+	 Purpose: Call remote service to generate thumbnail, then save to local filesystem
+	
+		Original Sourcecode:
+		- Use remote images and cache them localy with image cache (http://drupal.org/node/251009)
+	*/
+function previewgenerator_saveImage($path) {
+
+	global $user;
+
+	$destination_path = file_directory_path();	//Set directory where to save files
+  $imagename = date("mdYgis", time()) ."-". $user->uid .".". substr($path, strrpos($path, '.') + 1);	//Create image name based on date/time and finding the file extension from the pathname
+  $image_path = $destination_path."/". $imagename;	//Create image path from destination and image name
+	
+		//Download file for storing on local system
+	$remote_image = file_get_contents($path) or die('Could not grab the file');	//Get remote file
+    $local_image  = fopen($image_path, 'w+') or die('Could not create the file');	//create local file
+    fputs($local_image, $remote_image) or die('Could not write to the file');	//store remote file in newly created local file
+    fclose($local_image);	//close local file
+    unset($remote_image);	//Garbage cleanup
+  
+	   //Set message 
+	drupal_set_message("The file ". $image_path ." was created.");
+   
+    return $image_path; //return image
+}
+
+
+	/**
+	*
+	*/
+function theme_previewgenerator_displayform($carouselid) {
+	
+	$previewGenPath = drupal_get_path('module', 'previewgenerator');
+	
+	$output = '<div id="' .$carouselid .'" class="carousel">
+			<div class="carouseltop">
+				
+			</div>
+			<div id="' .$carouselid .'_bulletcontainer" class="bulletcontainer">
+				<div id="' .$carouselid .'_navbuttons" class="carouselnavbuttons">
+					
+					<div id="' .$carouselid .'_bulletcontainer" class="bulletcontainer"></div>
+					
+				</div>
+				<div id="' .$carouselid .'_navindicate" class="navindicate"></div>
+			</div>
+			<a id="' .$carouselid .'_previousbutton" class="previousbutton" title="Previous"></a>
+			<div id="' .$carouselid .'_window" class="_clipwindow">
+				<div id="' .$carouselid .'_statuscontainer" class="loadingcontainer">
+					<div id="' .$carouselid .'_status" class="status"></div>
+					<img src="/'. $previewGenPath .'/images/ajax-loader.gif" id="' .$carouselid .'_loading" class="" alt="Loading"/>
+				</div>
+				<div id="' .$carouselid .'_imagecontainer" class="imagecontainer"></div>
+			</div>
+			<a id="' .$carouselid .'_nextbutton" class="nextbutton" title="Next"></a>
+			<div class="carouselbottom">
+				<input type="checkbox" id="flushcache" value="true" /> <label for="flushcache">Flush Cache</label>
+				<input type="checkbox" id="screenshot" value="true" checked="checked"/> <label for="screenshot">Screenshots</label>
+				<a href="#" id="' .$carouselid .'_refresh_btn" class="refresh_btn pregen_btn">Load Thumbnails</a>
+				<div id="'.$carouselid .'_addlink_container" class="addlink_container">
+					<a id="'.$carouselid .'_addlink_btn" class="pregen_btn btn_addlink">Add Link URL</a><br/>
+					<input type="text" id="'.$carouselid .'_addlink_field" name="'.$carouselid .'_addlink_field" class="popupfield" size="50" maxlength="500"/>
+				</div>
+			</div>
+		</div>';
+		return $output;
+}
+
+
+	/**  
+	* Get all urls from form POST and return images in JSON wrapper
+	*	
+	*/
+function previewgenerator_callback() {
+  		//If url post found
+	
+	if($_POST['url']) {
+	  
+	  
+	  	$imgArray = array();	//define new thumbnail container array
+		$display = array();
+		
+			//Cycle through each url
+		$urls = $_POST['url'];
+		$screenshot = $_POST['screenshot'];
+		$cache = $_POST['cache'];
+		
+		foreach ($urls as $url) {
+			//echo $url;
+			$images = array();
+			
+			if($_POST['screenshot'] == "true"){
+				$imgArray[] = previewgenerator_getScreenshot($url, $cache);
+			}
+			
+			$images = previewgenerator_getimages($url);  //retreive list of images and store in variable
+				//for each thumbnail found, store in array to be returned;
+				
+			$imgArray = array_merge((array)$imgArray, (array)$images);
+		}
+		
+			//print_r($imgArray);
+		
+		//$imgArray['thumbnails'] = $imgArray;
+		$display['thumbnails'] = $imgArray;
+		//print_r($display);
+		
+		if($display) {
+			
+			echo arr2json($display);
+		} else {	
+			$errorArr = array("error"=>"No Images found.");
+			echo arr2json($errorArr);
+		}
+		
+	} else {
+		$errorArr = array("error"=>"No URLs found.");
+		echo arr2json($errorArr);
+	}
+  
+  //echo "previewgenerator";
+}
+
+	/**
+	* CREATE THUMBNAIL FROM URL
+	* 
+	* Purpose: Call remote service to generate thumbnail, then save to local filesystem
+	*
+	*	Original Sourcecode:
+	*	- Use remote images and cache them localy with image cache (http://drupal.org/node/251009)
+	*/
+function previewgenerator_getScreenshot($path, $recreate = false) {
+	global $base_url;
+	global $user;
+	
+	$output = "";	//Clear $output value
+	$destination_path = file_directory_path() ."/temp";	//Set directory where to save files
+	$image_name = date("mdYgis", time()) ."-". $user->uid;
+  $image_path = $destination_path."/".$image_name .".jpg";	//Create image path from destination and image name
+	$imagetemp_path = file_directory_path() ."default_screenshot.jpg";
+		// configuration parameters
+	$url = 'http://webthumb.bluga.net/easythumb.php?'; // make a thumbnail of this url
+	
+	$apikey = variable_get('previewgenerator_bluga_apikey', '');//'8c5bd3add514becfc2b3653b2ecaceda';
+	$userId = variable_get('previewgenerator_bluga_userid', ''); //4734; // your user id here
+	$date = gmdate('Ymd');
+	$size = 'large';
+	$cache = 1;
+	
+	$fetchUrl = $url. "user=$userId&url=".urlencode($path)."&hash=".md5($date.$path.$apikey)."&size=". $size ."&cache=". $cache;
+
+	
+		//Create fetch url (using third-party service to generate thumbnail and return image) 
+	//$fetchUrl = "http://www.shrinktheweb.com/xino.php?embed=1&STWAccessKeyId=ce35ac829902a23&Size=xlg&stwUrl=" .$path;
+    
+		//Call to generate image, but first check if it exists in cache
+	if (file_exists($image_path) && $recreate == false) { // you already downloaded that image, just return it...
+		$i = getimagesize($image_path);	//Get image size
+		$output = array("url"=>$base_url."/".$image_path, "width"=>$i[0], "height"=>$i[1]);
+		//drupal_set_message("The file ". $image_path ." already exists.");
+  } else { // if not found in local directory cache, download the image...
+		$remote_image = file_get_contents($fetchUrl) or file_get_contents($imagetemp_path);
+		
+			//Check if file can be opened
+ 		if (!$local_image  = fopen($image_path, 'w+')) {
+    	watchdog('content', 'PreviewGenerator: Could not open remote screenshot image. '. $image_path);
+  	}
+    
+    	 //Write content to our opened file.
+    if (fwrite($local_image, $remote_image) === FALSE) {
+    	watchdog('content', 'PreviewGenerator: Could not save screenshot image. '. $image_path);
+  	} else {
+    	watchdog('content', 'New WOC XML created');
+  	}
+    
+    fclose($local_image);
+    unset($remote_image);
+       	
+		$i = getimagesize($image_path);
+    $output = array("url"=>$base_url."/".$image_path, "width"=>$i[0], "height"=>$i[1]);
+		//drupal_set_message("The file ". $image_path ." was created.");
+		
+  }
+   
+  return $output;
+}
+	
+	/*
+	*   Get <img> tags from URL, returns as array
+	*	
+	*	$link: URL to look for images
+	*	Dependacies:
+	*	- previewgenerator_getDomain()
+	*
+	*/
+function previewgenerator_getimages($link) {
+	
+		//Get dimensions from admin settings
+	$width = variable_get('previewgenerator_thumbnail_width', '125');
+	$height = variable_get('previewgenerator_thumbnail_height', '125');
+	
+		//Set Reg Exp for which tags to look for
+	//$regex = '/<img[^\/]+src="([^"]+\.(jpe?g|gif|png))/';
+	$regex = '/(img|src)=("|\')[^"\'>]+/i';
+	
+	
+	$url = $link;
+	
+	/**
+	* Initialize the cURL session
+	*/
+	$ch = curl_init($url);
+	/**
+	* Set the URL of the page or file to download.
+	*/
+	
+	/**
+	* Ask cURL to return the contents in a variable
+	* instead of simply echoing them to the browser.
+	*/
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	curl_setopt($ch, CURLOPT_HEADER, false);
+	/**
+	* Execute the cURL session
+	*/
+	$xmlsrc = curl_exec ($ch);
+	/**
+	* Close cURL session
+	*/
+	curl_close ($ch);
+
+		// Get all images from a HTML document...  Reference: http://www.catswhocode.com/blog/15-php-regular-expressions-for-web-developers
+	$images = array();
+	preg_match_all($regex, $xmlsrc, $media, PREG_PATTERN_ORDER);
+	//unset($data);
+	$data=preg_replace('/(img|src)("|\'|="|=\')(.*)/i',"$3",$media[0]);
+	foreach($data as $url)
+	{
+		$info = pathinfo($url);
+		if (isset($info['extension']))
+		{
+			if ((
+					($info['extension'] == 'jpg') ||
+					($info['extension'] == 'jpeg') ||
+					($info['extension'] == 'gif') ||
+					($info['extension'] == 'png')
+				) && (
+					($url = previewgenerator_rel2abs($url, $link)) &&
+					($i = getimagesize($url)) &&
+					$i[0] >= ($width-10) &&
+					$i[1] >= ($height-10)
+				)) {
+					array_push($images, array("url"=>$url, "width"=>$i[0], "height"=>$i[1]));
+				}
+		}
+		
+	}
+	
+	return $images;
+	
+}
+
+	/* 
+	*  returns domainname for the url provided
+	*	
+	************/
+function previewgenerator_getDomain($url) {
+    if(filter_var($url, FILTER_VALIDATE_URL, FILTER_FLAG_HOST_REQUIRED) === FALSE)
+    {
+        return false;
+    }
+    /*** get the url parts ***/
+    $parts = parse_url($url);
+    /*** return the host domain ***/
+    return $parts['scheme'].'://'.$parts['host'];
+}
+
+
+	/**
+	*	Return list of fields for the content type
+	*
+	*/
+function previewgenerator_get_node_fields($type_name, $format = NULL) {
+	
+	// Need to load the CCK include file where content_field_instance_create() is defined.
+	module_load_include('inc', 'content', 'includes/content.admin');
+	
+		//Get fields from content type
+	$node = content_field_overview_form(&$form_state, $type_name);
+	$nodeFields = $node['#fields'];	// Load only the fields list
+	$nodeFields[] = "body_field";		// Add
+	$nodeFields[] = "title";				// Add
+	if($format == "JSON") {
+		echo arr2json($nodeFields);			//Cohvert to JSON and output
+	} else {
+		return $nodeFields;
+	}
+}
+
+
+	/* 
+	*  Convert relational image tags into absolute url with domain name
+	*	
+	************/
+function previewgenerator_rel2abs($url, $host) {
+    if (substr($url, 0, 4) == 'http') {
+        return $url;
+    } else {
+        $hparts = explode('/', $host);
+
+        if ($url[0] == '/') {
+            return implode('/', array_slice($hparts, 0, 3)) . $url;
+        } else if ($url[0] != '.') {
+            array_pop($hparts);
+            return implode('/', $hparts) . '/' . $url;
+        }
+    }
+}
+
+
+function arr2json($arr){
+        foreach($arr as $k=>&$val) $json[] = $k.':'.php2js($val);
+        if(count($json) > 0) return '{'.implode(',', $json).'}';
+        else return '';
+    }
+    function php2js($val){
+        if(is_array($val)) return arr2json($val);
+        if(is_string($val)) return '"'.addslashes($val).'"';
+        if(is_bool($val)) return 'Boolean('.(int) $val.')';
+        if(is_null($val)) return '""';
+        return $val;
+    }
+    
+
+    /* 
+	*  Convert PHP Array to JSON  
+	*	Uses PHP json_encode (if available) or degrades to parse using loops
+	* 	Source: http://www.bin-co.com/php/scripts/array2json/
+	*/	
+function array2json($arr) {
+	
+	//if(function_exists('json_encode')) return json_encode($arr); //Lastest versions of PHP already has this functionality.
+    $parts = array();
+    $is_list = false;
+
+    //Find out if the given array is a numerical array
+    $keys = array_keys($arr);
+    $max_length = count($arr)-1;
+    if(($keys[0] == 0) and ($keys[$max_length] == $max_length)) {//See if the first key is 0 and last key is length - 1
+        $is_list = true;
+        for($i=0; $i<count($keys); $i++) { //See if each key correspondes to its position
+            if($i != $keys[$i]) { //A key fails at position check.
+                $is_list = false; //It is an associative array.
+                break;
+            }
+        }
+    }
+
+    foreach($arr as $key=>$value) {
+        if(is_array($value)) { //Custom handling for arrays
+            if($is_list) $parts[] = array2json($value); /* :RECURSION: */
+            else $parts[] = '"' . $key . '":' . array2json($value); /* :RECURSION: */
+        } else {
+            $str = '';
+            if(!$is_list) $str = '"' . $key . '":';
+
+            //Custom handling for multiple data types
+            if(is_numeric($value)) $str .= $value; //Numbers
+            elseif($value === false) $str .= 'false'; //The booleans
+            elseif($value === true) $str .= 'true';
+            else $str .= '"' . addslashes($value) . '"'; //All other things
+            // :TODO: Is there any more datatype we should be in the lookout for? (Object?)
+
+            $parts[] = $str;
+        }
+    }
+    $json = implode(',',$parts);
+    
+    if($is_list) return '[' . $json . ']';//Return numerical JSON
+    return '{' . $json . '}';//Return associative JSON
+} 

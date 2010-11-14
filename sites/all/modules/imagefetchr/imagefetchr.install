@@ -1,0 +1,18 @@
+<?php
+// $Id: $
+
+/**
+ * Implimentation of hook_update
+ *
+ *  Sets weight of module to be 10 so that it can effect fieldgroup
+ */
+function imagefetchr_update_6101() {
+   $items = array();
+  $items[] = update_sql(
+    "UPDATE {system}
+    SET weight = 10
+    WHERE `name` = 'imagefetchr';"
+  );
+  drupal_set_message('Updated ImageFetchr module weight to 10');
+  return $items;
+}

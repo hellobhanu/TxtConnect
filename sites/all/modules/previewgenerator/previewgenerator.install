@@ -1,0 +1,23 @@
+<?php
+// $Id: previewgenerator.install,v 0.5 2010/4/3 12:00:00 emuir Exp $
+
+/**
+ * @file
+ * Installation/updates for Preview Generator.
+ */
+
+/**
+ * Implimentation of hook_update
+ *
+ *  Sets weight of module to be 10 so that it can effect fieldgroup
+ */
+function previewgenerator_update_6101() {
+   $items = array();
+  $items[] = update_sql(
+    "UPDATE {system}
+    SET weight = 10
+    WHERE `name` = 'previewgenerator';"
+  );
+  drupal_set_message('Updated Preview Generator module weight to 10');
+  return $items;
+}

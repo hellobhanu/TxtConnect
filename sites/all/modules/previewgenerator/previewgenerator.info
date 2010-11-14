@@ -1,0 +1,13 @@
+; $Id:$
+name = Preview Generator
+description = Looks for any URL inside form fields and then retreives all images from them.  It also has the ability to return screenshot images using 3rd-party services
+
+dependencies[] = content
+dependencies[] = fieldgroup
+dependancies[] = filefield
+dependancies[] = imagefield
+
+version = "6.x-0.7"
+core = "6.x"
+project = "previewgenerator"
+datestamp = "1230725138"

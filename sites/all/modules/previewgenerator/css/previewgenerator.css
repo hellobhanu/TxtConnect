@@ -1,0 +1,282 @@
+@charset "UTF-8";
+/* CSS Document */
+
+
+.carousel {
+	margin:0px 0px 10px;
+	width:700px;
+}
+
+.carouseltop {
+	overflow:hidden;
+	position:relative;
+	width:575px;
+	}
+
+.pregen_btn {
+	padding:3px 7px;
+	-moz-border-radius:7px;
+	-webkit-border-radius:7px;
+	border:1px solid #CCC;
+	background:#fff;
+	width:135px;
+	font-weight:bold;
+	font-size:1.0em;
+	float:right;
+	text-align:center;
+	outline:none;
+	color:#EE3123;
+	margin:5px 35px 0px 10px;
+}
+
+.pregen_btn:hover {
+	color:#fff;
+	background:#EE3123;
+}
+
+.refresh_btn {
+	padding:3px 7px;
+	-moz-border-radius:7px;
+	-webkit-border-radius:7px;
+	border:1px solid #CCC;
+	background:#fff;
+	width:135px;
+	font-weight:bold;
+	font-size:1.0em;
+	float:right;
+	text-align:center;
+	outline:none;
+	color:#EE3123;
+	margin:5px 35px 0px 10px;
+}
+
+.refresh_btn:hover {
+	color:#fff;
+	background:#EE3123;
+}
+
+
+.addlink_container {
+	position:relative;
+	float:right;
+	display:block;
+	
+}
+
+.btn_addlink {
+	float:right;
+	cursor:pointer;
+}
+
+.popupfield {
+	display:none;
+	position:absolute;
+	clear:both;
+	margin:20px 0px 0px 10px;
+}
+
+#findvid_container {
+	position:relative;
+	overflow:hidden;
+}
+
+#findvid_btn {
+	float:left;
+	left:325px;
+	margin:0;
+	position:relative;
+	width:100px;
+}
+
+#vidresults {
+	border:1px solid black;
+	clear:both;
+	float:left;
+	left:320px;
+	position:relative;
+	top:25px;
+	width:350px;
+	z-index:5;
+}
+
+.carouselnavbuttons {
+	float:left;
+	margin-right:10px;
+}
+.navindicate {
+	float:left;
+	font-size:0.9em;
+}
+
+.bulletcontainer {
+	overflow:hidden;
+	margin:auto;
+	position:relative;
+	text-align:center;
+}
+
+.carousel .previousbutton {
+	background:url('../images/buttons.gif') -50px no-repeat;
+	cursor:pointer;
+	width:25px;
+	margin:0px 5px;
+	height:120px;
+	position:relative;
+	float:left;
+}
+
+.carousel .nextbutton {
+	background:url('../images/buttons.gif') -75px no-repeat;
+	cursor:pointer;
+	width:25px;
+	margin:0px 5px;
+	height:120px;
+	position:relative;
+	float:left;
+}
+
+.carousel .previousbutton:hover {
+	background:url('../images/buttons.gif') -100px no-repeat;
+	cursor:pointer;
+	text-decoration:none;
+}
+
+.carousel .nextbutton:hover {
+	background:url('../images/buttons.gif') -125px no-repeat;
+	cursor:pointer;
+	text-decoration:none;
+}
+
+.carousel .previousbutton:active {
+	background:url('../images/buttons.gif') -150px no-repeat;
+	cursor:pointer;
+}
+
+.carousel .nextbutton:active {
+	background:url('../images/buttons.gif') -175px no-repeat;
+	cursor:pointer;
+}
+
+
+.carousel .previousdisable, 
+.carousel .previousdisable:hover {
+	background:url('../images/buttons.gif') 0px no-repeat;
+	cursor:default;
+}
+
+.carousel .nextdisable, 
+.carousel .nextdisable:hover {
+	background:url('../images/buttons.gif') -25px no-repeat;
+	cursor:default;
+}
+
+.controlscontainer .statuscontainer {
+	text-align:center;
+	}
+
+.bulletcontainer .navbullets {
+	background:url('../images/buttons.gif') -205px -10px no-repeat;
+	width:15px;
+	height:15px;
+	float:left;
+	margin:5px 2.5px;
+	text-decoration:none;
+	cursor:pointer;
+}
+.bulletcontainer .current {
+	background:url('../images/buttons.gif') -218px -10px no-repeat;
+	width:15px;
+	height:15px;
+	float:left;
+	margin:5px 2.5px;
+	text-decoration:none;
+	cursor:default;
+}
+
+
+._clipwindow {
+	width:600px;
+	height:120px;
+	overflow:hidden;
+	border:1px solid #ccc;
+	background:#eee;
+	position:relative;
+	float:left;
+}
+
+._clipwindow .loadingcontainer {
+	position:absolute;
+	padding:5px;
+	z-index:50;
+	border:1px solid #333;
+	background:#333;
+	filter: alpha(opacity=85);
+  	-moz-opacity: 0.85;
+  	opacity: 0.85;
+	text-align:center;
+	width:100%;
+	color:#fff;
+}
+
+
+._clipwindow .status {
+	position:relative;
+	margin: 0;
+	color:#FFF;
+	text-align:center;
+}
+
+._clipwindow .error {
+	color:#FFF;
+	font-weight:bold;
+	background:none;
+	text-align:center;
+	border:none;
+}
+
+.imagecontainer {
+	margin:0;
+	padding:0px;
+	width:30000px;
+	
+}
+
+.imagecontainer div.thumbnail {
+	float:left;
+	margin:5px 2.5px;
+	width:110px;
+	text-align:center;
+}
+
+.imagecontainer img.selected {
+	border:3px solid #F00;
+	cursor:default;
+}
+
+.imagecontainer div.thumbnail img {
+	cursor:pointer;
+	}
+
+.imagecontainer .thumbnail-meta {
+	font-size:0.8em;
+	line-height:1.0em;
+}
+
+.carousel .carouselbottom {
+	clear:both;
+	padding:0px 25px 0px 35px;
+}
+
+.carousel label {
+	font-weight:normal;
+	font-size:0.9em;
+	display:inline;
+	cursor:pointer;
+}
+
+
+#edit-previewgenerator-field-thmbimage-0-ahah-wrapper, 
+#previewgenerator-display-wrapper,
+#thumbnail_linkto-wrapper {
+	margin:0px 0px 0px 15px;
+}

@@ -1,0 +1,148 @@
+<?php
+
+
+	/**
+	 *	Implementation of hook_help
+	 *		Adds help menu item
+	 */
+function txtconnect_help($path, $arg) {
+  switch ($path) {
+   case 'admin/help#txtconnect':
+      return t('');
+  }
+}
+
+
+	/**
+	 * Implementation of hook_perm()
+	 * 		Sets the permissions for the module
+	 */
+function txtconnect_perm() {
+  return array('administer txtconnect', 'access txtconnect');
+}
+
+
+	/*
+	 * Implementation of hook_theme().
+	 *		create entries for all module specific themed functions
+	 */
+function txtconnect_theme() {
+	$theme = array(
+    	'twiliocapture' => array(
+      		'arguments' => array(
+        		'user' => $user
+    	)),
+  );
+  
+   return $theme;
+
+}
+
+
+/**
+	 *	Implementation of hook_menu
+	 *		Adds menu items or page callbacks for module
+	 */
+function txtconnect_menu() {
+	$items = array();
+
+	$items['twiliocapture'] = array(
+		'page callback' => 'txtconnect_twilio_callback',
+		'title'  => t('twilio callback'),
+		'access callback' => true,
+		'type' => MENU_CALLBACK
+	);
+
+	/*$items['admin/settings/previewgenerator'] = array(
+		'title' 			=> t('Preview Generator settings'),
+		'description' 		=> t('Preview Generator module settings'),
+		'page callback' 	=> 'drupal_get_form',
+		'page arguments' 	=> array('txtconnect_admin_settings'),
+		'access arguments' 	=> array('administer previewgenerator'),
+		'type' => MENU_NORMAL_ITEM,
+		'file'				=> 'previewgenerator.admin.inc',
+	);
+     */
+
+  return $items;
+}
+
+
+function txtconnect_twilio_callback(){
+
+  //profile_load_profile($user);
+  //print_r($user);
+
+  //db_query('SELECT f.name, f.type, v.value FROM {profile_fields} f INNER JOIN {profile_values} v ON f.fid = v.fid WHERE uid = %d', $user->uid);
+
+
+    // Check if post back from Twilio
+  
+  if($_POST['from']){
+       // Search drupal users for existing FROM phone number
+
+       $outout = "From: ". $_POST['from'] . "To: ". $_POST['to'] ."Body: " . $_POST['body'];
+       $local_image  = fopen("sites/default/files/test.txt", 'w+') or die('Could not create the file');	//create local file
+       fputs($local_image, $outout) or die('Could not write to the file');	//store remote file in newly created local file
+       fclose($local_image);	//close local file
+
+
+       // Search drupal users for existing TO phone number
+
+  } else {
+    echo '<form method="post" action="http://txtconnect.local/twiliocapture"><input type="text" name="from" id="from"/><input type="text" name="to" id="to"/><input type="submit"/></form>';
+    
+  }
+
+
+
+}
+
+
+/**
+ * Admin/settings form.
+ */
+function txtconnect_admin_settings($configuration) {
+  
+  //$form['sms_twilio_balance'] = array(
+  //  '#type' => 'item',
+  //  '#title' => t('Current balance'),
+  //  '#value' => sms_twilio_balance(),
+  //);
+  
+  $form['txtconnect_api_sid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Account SID'),
+    '#description' => t('Twilio account sid.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => $configuration['sms_twilio_api_sid'],
+  );
+  $form['txtconnect_api_auth_token'] = array(
+    '#type' => 'textfield',
+    '#title' => t('API ID'),
+    '#description' => t('Twilio auth token.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => $configuration['sms_twilio_api_auth_token'],
+  );
+  $form['txtconnect_number'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Number'),
+    '#description' => t('The number of your Twilio account.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => $configuration['sms_twilio_number'],
+  );
+  $form['txtconnect_path'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Twilio library path'),
+    '#description' => t('The path to the twilio library.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#default_value' => !empty($configuration['sms_twilio_path']) ? $configuration['sms_twilio_path'] : 'sites/all/libraries/twilio',
+  );
+
+ 
+  return $form;
+}
