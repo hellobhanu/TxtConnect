@@ -1,0 +1,17 @@
+name = txtconnect
+description = Tableless, recolorable, multi-column, fluid width theme (default).
+version = VERSION
+core = 6.x
+engine = phptemplate
+stylesheets[all][] = css/style.css
+stylesheets[print][] = css/print.css
+  ; Set the conditional stylesheets that are processed by IE.
+conditional-stylesheets[if IE][all][fix-ie] = css/fix-ie.css
+
+; set Regions
+regions[left] = Left sidebar
+regions[right] = Right sidebar
+regions[content] = Content
+regions[header] = Header
+regions[header_bottom] = Header Bottom
+regions[footer] = Footer
