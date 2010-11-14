@@ -32,6 +32,10 @@ function txtconnect_theme() {
       		'arguments' => array(
         		'user' => $user
     	)),
+        'twilio_send' => array(
+      		'arguments' => array(
+        		'user' => $user
+    	)),
   );
   
    return $theme;
@@ -53,6 +57,13 @@ function txtconnect_menu() {
 		'type' => MENU_CALLBACK
 	);
 
+    $items['twilio_send'] = array(
+		'page callback' => 'txtconnect_twilio_send',
+		'title'  => t('twilio send'),
+		'access callback' => true,
+		'type' => MENU_CALLBACK
+	);
+
 	/*$items['admin/settings/previewgenerator'] = array(
 		'title' 			=> t('Preview Generator settings'),
 		'description' 		=> t('Preview Generator module settings'),
@@ -68,36 +79,199 @@ function txtconnect_menu() {
 }
 
 
-function txtconnect_twilio_callback(){
+function txtconnect_twilio_send(){
 
-  //profile_load_profile($user);
-  //print_r($user);
-
-  //db_query('SELECT f.name, f.type, v.value FROM {profile_fields} f INNER JOIN {profile_values} v ON f.fid = v.fid WHERE uid = %d', $user->uid);
-
-
-    // Check if post back from Twilio
   
-  if($_POST['from']){
-       // Search drupal users for existing FROM phone number
+  $module_path = drupal_get_path('module', 'txtconnect');
+  require $module_path."/twilio/twilio.php";
 
-       $outout = "From: ". $_POST['from'] . "To: ". $_POST['to'] ."Body: " . $_POST['body'];
-       $local_image  = fopen("sites/default/files/test.txt", 'w+') or die('Could not create the file');	//create local file
-       fputs($local_image, $outout) or die('Could not write to the file');	//store remote file in newly created local file
-       fclose($local_image);	//close local file
+  
+  $AccountSid = 'AC7fb96c3d990117b3734a337ff797c248';
+  $AuthToken = '45c46c4ea3be1704bcb2d34529ade1ff';
 
+    /* Twilio REST API version */
+  $ApiVersion = "2010-04-01";
 
-       // Search drupal users for existing TO phone number
-
-  } else {
-    echo '<form method="post" action="http://txtconnect.local/twiliocapture"><input type="text" name="from" id="from"/><input type="text" name="to" id="to"/><input type="submit"/></form>';
-    
-  }
+    // Outgoing Caller ID you have previously validated with Twilio
+  $CallerID = '4155992671';
 
 
+
+  $base_url = 'https://'.$acct.':'. $authtoken .'@api.twilio.com/2010-04-01';
+
+  $url = $base_url .'/Accounts/'.$acct .'/SMS/Messages';
+
+  $output = 'from='. $acct .'&to=&body=6408-8559 testme';
+  
+
+  /* Instantiate a new Twilio Rest Client */
+	$client = new TwilioRestClient($AccountSid, $AuthToken);
+
+	/* Initiate a new outbound call by POST'ing to the Calls resource */
+	$response = $client->request("/$ApiVersion/Accounts/$AccountSid/SMS/Messages",
+		"POST", array(
+		"From" => $CallerID,
+		"To" => "206-375-6133",
+		"Body" => "testme"
+
+	));
+	if($response->IsError)
+		echo "Error: {$response->ErrorMessage}";
+	else
+		echo "Send SMS: {$response->ResponseXml->Call->Sid}";
 
 }
 
+function txtconnect_twilio_callback(){
+
+
+  /*
+   *  Documenation References:
+   *  - http://www.twilio.com/docs/api/2010-04-01/twiml/sms/twilio_request
+   *  - http://www.twilio.com/docs/api/2010-04-01/twiml/sms/your_response
+   */
+
+    // Check if POST exists
+  if(isset($_POST)) {
+
+      // Get data from Twilio callback
+    $accountSid = $_POST['AccountSid'];   // Get AccountSid
+    $from_number = str_replace("+1","",$_POST['From']);        // Get From Phone
+    //$to_number = $_POST['To'];            // Get To Phone
+    $body = $_POST['Body'];               // Get Body
+
+      // Parse body for elements (phone, msg)
+    $bodyArray = explode(" ", $body);
+
+    $to_number = $bodyArray[0];
+    $relmessage = $bodyArray[1];
+    // TODO: normalize to_number from body
+    //http://forum.statcounter.com/vb/archive/index.php/t-26326.html
+    //http://forum.civicrm.org/index.php?topic=9767.0
+    //http://www.jonra.com/temp/cleanphone.php
+   
+      // Check users if FROM exists
+    if(!empty($from_number)){
+      $from_user = txtconnect_userexists($from_number);
+    }
+
+      // Check users if TO exists
+    if(!empty($to_number)){
+      $to_user = txtconnect_userexists($to_number);
+    }
+
+       // Create TO user if doesn't exist
+    if(!$to_user) {
+        // generate "random" 6-digit verification code
+      $code = rand(100000, 999999);
+    
+      // Referene - http://www.michaelphipps.com/how-create-users-programmatically-drupal-6x
+      $newUser = array(
+        'name' => $to_number,
+        'pass' => $code, // note: do not md5 the password
+        //'mail' => 'email address',
+        'status' => 1,
+        //'init' => 'email address'
+      );           
+      $to_user = user_save(null, $newUser);
+
+      //TODO: Send welcome sms to new user
+      
+    }
+
+      // Associate both accounts
+    txtconnect_create_relationship($from_user->uid, $to_user->uid);
+
+  }
+
+   /*
+    // Test twilio working
+   $outout = "From: ". $_POST['from'] . "To: ". $_POST['to'] ."Body: " . $_POST['body'];
+   $outout = $_POST['AccountSid'];
+   $local_image  = fopen("sites/default/files/test.txt", 'w+') or die('Could not create the file');	//create local file
+   fputs($local_image, $outout) or die('Could not write to the file');	//store remote file in newly created local file
+   fclose($local_image);	//close local file
+   */
+
+}
+
+
+function txtconnect_userexists($number) {
+   $search_for = array('name'=>$number);  // create array of fields and values to search
+   $userexists = user_load($search_for);        // Load from user if exists
+   return $userexists;
+}
+
+
+function txtconnect_create_relationship($userA, $userB){
+
+    //Query to see if relationship already exists
+  $relExists = db_result(db_query("SELECT 1 FROM {txtconnect_relationship} WHERE from_uid = '%s' AND to_uid = '%s'", $userA, $userB));
+  //db_query('UPDATE r.name, r.type, v.value FROM {txtconnect_relationship} r INNER JOIN {profile_values} v ON f.fid = v.fid WHERE uid = %d', $user->uid);
+
+    // if no relationship exists, create it
+  if (!$relExist) {
+      $date_created = date_create();
+
+        //Create value array to send to database
+      $rel = array(
+        'from_uid'=> $userA,
+        'to_uid'=> $userB,
+        'message'=> "message placeholder",
+        'date_created'=> $date_created,
+      );
+
+        // Enter new database record
+      drupal_write_record('txtconnect_relationship', $rel);
+
+  }
+
+}
+
+
+function txtconnect_querylog(){
+
+/*
+  $module_path = drupal_get_path('module', 'txtconnect');
+  require $module_path."/twilio/twilio.php";
+
+  $AccountSid = 'AC7fb96c3d990117b3734a337ff797c248';
+  $AuthToken = '45c46c4ea3be1704bcb2d34529ade1ff';
+
+
+  $ApiVersion = "2010-04-01";
+
+    // Outgoing Caller ID you have previously validated with Twilio
+  $CallerID = '4155992671';
+
+
+	$client = new TwilioRestClient($AccountSid, $AuthToken);
+
+
+	$response = $client->request("/$ApiVersion/Accounts/$AccountSid/SMS/Messages",
+		"GET");
+
+    if($response->IsError)
+    	echo "Error fetching recent calls: {$response->ErrorMessage}";
+    else {
+    	//print_r($response->ResponseXml->SMSMessages->SMSMessage);
+        foreach($response->ResponseXml->SMSMessages->SMSMessage AS $call){
+    		if(strtoTime($GLOBALS['dateCreated']) > strtoTime($call->DateCreated)) {
+               echo $call->DateCreated;
+               $GLOBALS['dateCreated'] = $call->DateCreated;
+            }
+            //echo strtoTime($call->DateCreated);
+        }
+        echo $GLOBALS['dateCreated'];
+            //echo "TXT from {$call->From} to {$call->To}";
+    		//echo " at {$call->StartTime} of length: {$call->Duration}\n";
+
+
+
+
+    }
+*/
+}
 
 /**
  * Admin/settings form.
