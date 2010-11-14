@@ -135,8 +135,8 @@ function txtconnect_twilio_callback(){
       $to_user = user_save(null, $newUser);
 
 // TODO: Send welcome sms to new user
-      //txtconnect_twilio_send($to_number, "6408-8559 Welcome to www.txtconnect.net, login with your phone number and code: ". $code);
-      txtconnect_twilio_send("2063756133", "6408-8559 Welcome to www.txtconnect.net, login with your phone number ".$to_number." and code: ". $code);
+      txtconnect_twilio_send($to_number, "Welcome to www.txtconnect.net, login with your phone number ".$to_number." and code: ". $code);
+      //txtconnect_twilio_send("2063756133", "6408-8559 Welcome to www.txtconnect.net, login with your phone number ".$to_number." and code: ". $code);
     }
 
       // Associate both accounts
@@ -175,7 +175,7 @@ function txtconnect_twilio_send($number, $msg){
   $ApiVersion = "2010-04-01";
 
     // Outgoing Caller ID you have previously validated with Twilio
-  $CallerID = '4155992671';
+  $CallerID = '4254093493';
 
   /* Instantiate a new Twilio Rest Client */
   $client = new TwilioRestClient($AccountSid, $AuthToken);
@@ -255,7 +255,7 @@ function txtconnect_twilio_query(){
   $ApiVersion = "2010-04-01";
 
     // Outgoing Caller ID you have previously validated with Twilio
-  $CallerID = '4155992671';
+  $CallerID = '4254093493';
 
 
 	$client = new TwilioRestClient($AccountSid, $AuthToken);
