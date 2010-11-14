@@ -204,7 +204,10 @@ function txtconnect_twilio_send($number, $msg){
  *
  */
 function txtconnect_userexists($number) {
-   $search_for = array('name'=>$number);  // create array of fields and values to search
+
+  //db_query('SELECT v.uid, f.name, f.type, v.value FROM {profile_fields} f INNER JOIN {profile_values} v ON f.fid = v.fid WHERE f.name = "profile_phone"' , $user->uid);
+
+  $search_for = array('name'=>$number);  // create array of fields and values to search
    $userexists = user_load($search_for);        // Load from user if exists
    return $userexists;
 }
@@ -217,7 +220,6 @@ function txtconnect_create_relationship($userA, $userB){
 
     //Query to see if relationship already exists
   $relExist = db_result(db_query("SELECT 1 FROM {txtconnect_relationships} WHERE from_uid = '%s' AND to_uid = '%s'", $userA, $userB));
-  //db_query('UPDATE r.name, r.type, v.value FROM {txtconnect_relationship} r INNER JOIN {profile_values} v ON f.fid = v.fid WHERE uid = %d', $user->uid);
 
     // if no relationship exists, create it
   if (!$relExist || empty($relExist)) {
