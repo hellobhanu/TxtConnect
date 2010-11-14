@@ -328,3 +328,11 @@ function txtconnect_admin_settings($configuration) {
  
   return $form;
 }
+
+/**
+ * Implementation of hook_views_api.
+ * Notifies the Views module that we're compatible with a particular API revision.
+ */
+function txtconnect_views_api() {
+  return array('api' => 2);
+}
