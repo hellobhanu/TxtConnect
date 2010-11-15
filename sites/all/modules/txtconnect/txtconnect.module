@@ -36,7 +36,14 @@ function txtconnect_theme() {
       		'arguments' => array(
         		'user' => $user
     	)),
-  );
+        'txtconnect_contacts' => array(
+      		 'template'=> 'page',
+            'arguments' => array(
+        		'user' => $user,
+                ),
+          
+    	),
+       );
   
    return $theme;
 
@@ -64,6 +71,14 @@ function txtconnect_menu() {
 		'type' => MENU_CALLBACK
 	);
 
+     $items['user/contacts'] = array(
+		'page callback' => 'txtconnect_contacts',
+		'title'  => t('My Contacts'),
+		'access callback' => true,
+		'type' => MENU_CALLBACK,
+        'template' => 'page',
+	);
+
 	/*$items['admin/settings/previewgenerator'] = array(
 		'title' 			=> t('Preview Generator settings'),
 		'description' 		=> t('Preview Generator module settings'),
@@ -78,6 +93,40 @@ function txtconnect_menu() {
   return $items;
 }
 
+function txtconnect_contacts(){
+
+  global $user;
+
+  // Get user
+  $uid = $user->uid;
+
+    ////$results = db_result(db_query('SELECT users.uid AS uid, users.picture AS users_picture, users.name AS users_name, users.mail AS users_mail, txtconnect_relationships.from_uid AS txtconnect_relationships_from_uid, txtconnect_relationships.to_uid AS txtconnect_relationships_to_uid, txtconnect_relationships.message AS txtconnect_relationships_message, txtconnect_relationships.date_created AS txtconnect_relationships_date_created FROM users users  LEFT JOIN txtconnect_relationships txtconnect_relationships ON users.uid = txtconnect_relationships.from_uid WHERE txtconnect_relationships.from_uid = '.$uid .'OR WHERE txtconnect_relationships.to_uid = '. $uid));
+  $results = db_query('SELECT * from txtconnect_relationships WHERE from_uid='.$uid.' OR to_uid='.$uid.' ORDER By date_created DESC');
+  while($result = db_fetch_array($results)) {
+
+    if ($result['from_uid'] == $uid) {
+      $otherUid = $result['to_uid'];
+    } else {
+      $otherUid = $result['from_uid'];
+    }
+  
+    //$results2 = db_query('SELECT * from users where uid=\'1\'');
+    $results2 = db_query('SELECT U.uid AS uid, U.picture AS users_picture, U.name AS users_name, U.mail AS users_mail, S.screen_name AS socialmediafeeds_useraccounts_screen_name, S.service AS socialmediafeeds_useraccounts_service, P.value AS profile_values_profile_phone_value FROM users U LEFT JOIN socialmediafeeds_useraccounts S ON U.uid = S.uid LEFT JOIN profile_values P ON U.uid = P.uid AND P.fid = "1" WHERE U.uid =\''.$otherUid.'\'');
+    $result2 = db_fetch_array($results2);
+    //print_r($result);
+
+      echo "Name: "; print $result2['users_name'] ."<br/>";
+      echo "Email: "; print $result2['users_mail'] ."<br/>";
+      echo "Message: "; print $result['message'] ."<br/>";
+  }
+/*
+  foreach($result as $key=>$value) {
+    print $result[$key]['name'];
+    //print_r($result);
+  }
+  //Create SQL statement
+*/
+}
 
 
 function txtconnect_twilio_callback(){
@@ -98,7 +147,7 @@ function txtconnect_twilio_callback(){
     $body = $_POST['Body'];               // Get Body
 
 	$phonenumber_match_regex = '/((\((\s)*)?(\d){3}(\)|-|\s|\.)*)?(\d){3}(\)|-|\s|\.)*(\d){4}/';
-	$phonenumber_normalizatoin_regex = '/[^\d]/';
+	$phonenumber_normalization_regex = '/[^\d]/';
 
 	//Find the phone number in the body. 
 	if(0 == preg_match($phonenumber_match_regex, $body, $matches, PREG_OFFSET_CAPTURE))
@@ -153,7 +202,7 @@ function txtconnect_twilio_send($number, $msg){
 
     // Include twilio lib
   $module_path = drupal_get_path('module', 'txtconnect');
-  require $module_path."/twilio/twilio.php";
+  require_once $module_path."/twilio/twilio.php";
 
     // contruct twilio account and API token
   $AccountSid = 'AC7fb96c3d990117b3734a337ff797c248';
@@ -202,7 +251,8 @@ function txtconnect_userexists($number) {
 
 /* Get a user by userNumber, or create it if they don't exist */
 function txtconnect_ensureuserexists($userNumber) {
-	$userObject = txtconnect_useexists($userNumber);
+	
+    $userObject = txtconnect_userexists($userNumber);
 	if (!$userObject)
 	{
 		// generate "random" 6-digit verification code
@@ -219,17 +269,17 @@ function txtconnect_ensureuserexists($userNumber) {
 		$userObject = user_save(null, $newUser);
 
 		// TODO: Send welcome sms to new user
-		txtconnect_twilio_send($userNumber, "Welcome to www.txtconnect.net, login with your phone number ".$userNumber." and code: ". $code);
+        txtconnect_twilio_send($userNumber, "Welcome to www.txtconnect.net, login with your phone number ".$userNumber." and code: ". $code);
 		//txtconnect_twilio_send("2063756133", "6408-8559 Welcome to www.txtconnect.net, login with your phone number ".$userNumber." and code: ". $code);		
 	}
-	return $userObject
+	return $userObject;
 }
 
 
 /*
  *
  */
-function txtconnect_create_relationship($userA, $userB){
+function txtconnect_create_relationship($userA, $userB, $relmessage){
 
     //Query to see if relationship already exists
   $relExist = db_result(db_query("SELECT 1 FROM {txtconnect_relationships} WHERE from_uid = '%s' AND to_uid = '%s'", $userA, $userB));
@@ -243,7 +293,7 @@ function txtconnect_create_relationship($userA, $userB){
       $rel = array(
         'from_uid'=> $userA,
         'to_uid'=> $userB,
-        'message'=> "message placeholder",
+        'message'=> $relmessage,
         'date_created'=> $date_created,
       );
 

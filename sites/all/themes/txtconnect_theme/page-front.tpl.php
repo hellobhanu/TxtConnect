@@ -12,7 +12,7 @@
 </head>
  
 <body<?php print phptemplate_body_class($left, $right); ?>>
-  <div id="page">
+  <div id="page-front">
 	<div id="header">
         <div id="header-top" class="clear-block">
           <?php print $header_top; ?>
@@ -50,18 +50,9 @@
 		  <div id="top-column">
 		  	<?php print $breadcrumb; ?>
 		  </div>
-		  
-		  <?php if ($left): ?>
-			<div id="sidebar-left" class="sidebar"><?php print $left ?></div>
-		  <?php endif; ?>
 
 		  <div id="center">
-			  
-		  	<?php
-              if($node->type != 'project') {
-                if ($title): print '<h1'. ($tabs ? ' class="with-tabs"' : '') .'>'. $title .'</h1>'; endif;
-              }
-            ?>
+			 
 			<?php if ($mission): print '<div id="mission">'. $mission .'</div>'; endif; ?>
 			<?php if ($tabs): print '<div id="tabs-wrapper" class="clear-block">'; endif; ?> 
 			
@@ -70,16 +61,11 @@
 			<?php if ($show_messages && $messages): print $messages; endif; ?>
 			<?php print $help; ?>
 			  <div class="clear-block">
-				<?php print $content ?>
+				<div class="login-container" ><?php print $content ?></div>
 			  </div>
 			  
 		  </div> <!-- /#squeeze, /#center -->
 
-		  <?php if ($right): ?>
-			<div id="sidebar-right" class="sidebar">
-			<?php print $right ?>
-			</div>
-		  <?php endif; ?>
 		</div><!-- /column container-->
 			
   </div><!-- /page -->
